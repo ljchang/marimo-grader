@@ -39,7 +39,7 @@ compose pull --quiet
 # Named volumes are created root-owned; the backend image runs as uid 10001.
 # Chown once so the worker can write its caches (no-op when already correct).
 echo "==> Preparing volumes"
-for vol in artifacts hf_cache uv_cache; do
+for vol in artifacts hf_cache uv_cache sandboxes; do
   docker volume create "grader_${vol}" >/dev/null
   docker run --rm -v "grader_${vol}:/v" alpine:3 sh -c \
     '[ "$(stat -c %u /v)" = 10001 ] || chown 10001:10001 /v'

@@ -31,6 +31,9 @@ from grader.services.artifacts import store
 from grader.worker.materialize import rewrite_dependencies
 
 TIMEOUT = int(os.environ.get("GRADER_AUTOGRADE_TIMEOUT", "300"))
+# Address-space cap for the notebook process. numpy/scipy/nilearn reserve a lot of virtual
+# memory at import, so MoGrader's 1 GiB default is too small for neuroimaging assignments.
+RLIMIT_AS = int(os.environ.get("GRADER_RLIMIT_AS", str(4 << 30)))
 USE_BWRAP = (
     os.environ.get("GRADER_USE_BUBBLEWRAP", "").lower() in ("1", "true", "yes")
     and shutil.which("bwrap") is not None
@@ -79,15 +82,24 @@ def grade(db: Session, sub: Submission) -> GradeResult:
     if integrity.has_hidden_tests(source_text):
         fixed, _hidden = integrity.inject_hidden_tests(source_text, fixed)
 
+    from grader.worker.sandbox import prepare_env
+
+    fixed = rewrite_dependencies(fixed)
+    # Build (or reuse) the notebook's environment *outside* bubblewrap: inside the
+    # sandbox the filesystem is read-only and there is no network, so marimo must
+    # run with --no-sandbox against a prepared venv.
+    venv = prepare_env(fixed)
     with tempfile.TemporaryDirectory(prefix="grader-run-") as td:
         nb = Path(td) / "submission.py"
-        nb.write_text(rewrite_dependencies(fixed))
+        nb.write_text(fixed)
         result = run_notebook(
             nb,
             timeout=TIMEOUT,
+            sandbox_dir=venv,
             safety_check=True,
             isolate_cwd=True,
             use_bubblewrap=USE_BWRAP,
+            rlimit_as=RLIMIT_AS,
         )
 
     if not result.export_ok:

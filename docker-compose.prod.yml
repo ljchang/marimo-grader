@@ -67,10 +67,12 @@ services:
       GRADER_USE_BUBBLEWRAP: "true"
       HF_HOME: /data/hf-cache
       UV_CACHE_DIR: /data/uv-cache
+      GRADER_SANDBOX_DIR: /data/sandboxes   # one venv per distinct dependency list
     volumes:
       - artifacts:/data/artifacts
       - hf_cache:/data/hf-cache
       - uv_cache:/data/uv-cache
+      - sandboxes:/data/sandboxes
     # bubblewrap creates unprivileged user namespaces (unshare(CLONE_NEWUSER)).
     # Docker's default seccomp profile only allows that with CAP_SYS_ADMIN, and
     # Ubuntu 24.04 additionally gates it behind AppArmor. If autograding fails
@@ -105,5 +107,6 @@ volumes:
   artifacts:      # submitted notebooks (content-addressed). Back this up.
   hf_cache:
   uv_cache:
+  sandboxes:      # prepared notebook environments (rebuildable)
   caddy_data:
   caddy_config:

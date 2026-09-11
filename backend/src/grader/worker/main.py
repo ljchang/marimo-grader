@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
 import tempfile
 import time
@@ -77,13 +76,17 @@ def _notebook_bytes(db: Session, sub: Submission) -> bytes:
 
 
 def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
-    src = _notebook_bytes(db, sub)
+    from grader.worker.sandbox import prepare_env, run_with_timeout
+
+    src = rewrite_dependencies(_notebook_bytes(db, sub).decode("utf-8", "replace"))
+    venv = prepare_env(src)
     with tempfile.TemporaryDirectory() as td:
         nb = Path(td) / "notebook.py"
-        nb.write_text(rewrite_dependencies(src.decode()))
+        nb.write_text(src)
         out = Path(td) / "notebook.html"
+        python = str(venv / "bin" / "python") if venv else sys.executable
         cmd = [
-            sys.executable,
+            python,
             "-m",
             "marimo",
             "export",
@@ -92,19 +95,17 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
             "-o",
             str(out),
             "--no-include-code",
-            "--sandbox",
+            "--no-sandbox",
         ]
-        # Rendering executes the notebook. It runs under the same sandbox as autograding.
+        # Rendering executes the notebook; widgets render as placeholders (GRADER_RENDER).
         env = {**os.environ, "MARIMO_SKIP_UPDATE_CHECK": "1", "GRADER_RENDER": "1"}
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=RENDER_TIMEOUT, env=env, cwd=td
-        )
+        proc = run_with_timeout(cmd, timeout=RENDER_TIMEOUT, env=env, cwd=td)
         if proc.returncode != 0 or not out.exists():
             raise RuntimeError(f"marimo export failed: {proc.stderr[-2000:]}")
         html = out.read_bytes()
     art = store().put(db, html, kind="render", content_type="text/html")
     sub.render_artifact_id = art.id
-    run.results = {"bytes": len(html)}
+    run.results = {"bytes": len(html), "env": str(venv) if venv else "worker"}
 
 
 def do_autograde(db: Session, run: GraderRun, sub: Submission) -> None:
@@ -162,12 +163,25 @@ def process(db: Session, run: GraderRun) -> None:
     db.commit()
 
 
+def requeue_stale(db: Session) -> int:
+    """Runs stuck in 'running' belong to a worker that died; give them back to the queue."""
+    rows = db.scalars(select(GraderRun).where(GraderRun.status == RunStatus.running)).all()
+    for r in rows:
+        r.status, r.started_at = RunStatus.queued, None
+    db.commit()
+    return len(rows)
+
+
 def loop(poll_seconds: float = 2.0, once: bool = False) -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     Session_ = get_sessionmaker()
     log.info("worker started (db=%s)", get_engine().dialect.name)
+    with Session_() as db:
+        n = requeue_stale(db)
+        if n:
+            log.warning("re-queued %d run(s) left 'running' by a previous worker", n)
     while True:
         with Session_() as db:
             run = claim(db)
