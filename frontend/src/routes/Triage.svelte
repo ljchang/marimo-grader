@@ -284,9 +284,9 @@
             {#each columns as q (q.id)}
               <th class="q">
                 {#if q.grading_mode !== 'auto'}
-                  <a href="/o/{offeringId}/grade/{q.id}" title="Open the grading queue for {q.qid}"><span class="qid">{q.qid}</span><span class="qtitle">{q.title}</span></a>
+                  <a href="/o/{offeringId}/grade/{q.id}" title="Open the grading queue for {q.qid}"><span class="qid">{q.qid}</span>{#if q.title && q.title !== q.qid}<span class="qtitle">{q.title}</span>{/if}</a>
                 {:else}
-                  <span class="qid">{q.qid}</span><span class="qtitle">{q.title}</span>
+                  <span class="qid">{q.qid}</span>{#if q.title && q.title !== q.qid}<span class="qtitle">{q.title}</span>{/if}
                 {/if}
                 <span class="qpts">{fmtNum(q.max_points)} pts{q.grading_mode === 'manual' ? ', graded by hand' : q.grading_mode === 'hybrid' ? ', partly by hand' : ''}</span>
               </th>

@@ -26,7 +26,7 @@ from pathlib import Path
 
 import httpx
 
-CHECK_RE = re.compile(r"""check\(\s*[rf]?["']([^"':]+)\s*:""")
+CHECK_RE = re.compile(r"""check\(\s*[rf]?["']([^"':]+)\s*:\s*([^"']*)["']""")
 MARKS_RE = re.compile(r"_marks\s*=\s*(\{[^}]*\})", re.S)
 
 
@@ -75,7 +75,8 @@ def _questions(source_text: str, manual: set[str], hybrid: dict[str, float]) -> 
     import ast
 
     marks = ast.literal_eval(m.group(1))
-    keys_with_checks = {k.strip() for k in CHECK_RE.findall(source_text)}
+    titles = {k.strip(): t.strip() for k, t in CHECK_RE.findall(source_text)}
+    keys_with_checks = set(titles)
     qs = []
     for qid, pts in marks.items():
         if qid in hybrid:
@@ -87,7 +88,7 @@ def _questions(source_text: str, manual: set[str], hybrid: dict[str, float]) -> 
         qs.append(
             {
                 "qid": qid,
-                "title": qid,
+                "title": titles.get(qid) or qid,
                 "max_points": float(pts),
                 "auto_points_max": auto_max,
                 "grading_mode": mode,

@@ -249,12 +249,20 @@ async def publish_version(
 
     course, term = a.offering.course.slug, a.offering.term
     question_payload = [q.model_dump(mode="json") for q in qs]
+    # Titles are presentation only: changing one updates the question in place and
+    # does not create a new version.
+    structural = [{k: v for k, v in q.items() if k != "title"} for q in question_payload]
     fingerprint = hashlib.sha256(
-        inst_bytes + json.dumps(question_payload, sort_keys=True).encode()
+        inst_bytes + json.dumps(structural, sort_keys=True).encode()
     ).hexdigest()
     if a.versions:
         latest = a.versions[-1]
         if (latest.cell_hashes or {}).get("publish_fingerprint") == fingerprint:
+            by_qid = {q.qid: q for q in a.questions}
+            for qi in qs:
+                if qi.qid in by_qid and by_qid[qi.qid].title != qi.title:
+                    by_qid[qi.qid].title = qi.title
+            db.flush()
             return JSONResponse(
                 {
                     "id": str(latest.id),
