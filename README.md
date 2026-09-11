@@ -1,4 +1,4 @@
-# DartBrains Grader
+# marimo-grader
 
 A multi-tenant, FERPA-appropriate grading service for [marimo](https://marimo.io) assignments.
 Students open a notebook (MoLab, WASM, or a local kernel), sign in with Dartmouth SSO from
