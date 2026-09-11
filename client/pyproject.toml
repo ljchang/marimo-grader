@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grader-client"
+version = "0.1.0"
+description = "Notebook-side client for the dartbrains grader: sign-in, submit and feedback widgets for marimo"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Luke Chang", email = "luke.j.chang@dartmouth.edu" }]
+dependencies = [
+    "anywidget>=0.9",
+    "traitlets",
+]
+
+[project.optional-dependencies]
+mograder = ["mograder>=0.3"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grader_client"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+# Rebuild the editable/path install whenever the sources change (uv only watches pyproject.toml by default).
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.py" }]

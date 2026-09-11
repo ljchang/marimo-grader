@@ -1,0 +1,511 @@
+<title>DartBrains Grader</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F6F7F4; --surface:#ECF0EA; --ink:#171C19; --muted:#5A645E; --rule:#D3DAD3;
+  --accent:#00693E; --accent-ink:#FFFFFF; --accent-soft:#DCEBDF; --lime:#A5D75F;
+  --warn:#8A5A00; --warn-soft:#F3E7C9; --code-bg:#E9EDE7;
+  --serif:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --sans:"Source Sans 3","Source Sans Pro",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#11150F; --surface:#181E17; --ink:#E4E9E3; --muted:#9AA69C; --rule:#2B342C;
+    --accent:#5DBB8A; --accent-ink:#0B120E; --accent-soft:#1C2E23; --lime:#A5D75F;
+    --warn:#E3B45C; --warn-soft:#2E2612; --code-bg:#1D241C;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11150F; --surface:#181E17; --ink:#E4E9E3; --muted:#9AA69C; --rule:#2B342C;
+  --accent:#5DBB8A; --accent-ink:#0B120E; --accent-soft:#1C2E23; --lime:#A5D75F;
+  --warn:#E3B45C; --warn-soft:#2E2612; --code-bg:#1D241C;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.55;padding-block:0 96px;padding-inline:20px}
+.page{max-width:72ch;margin:0 auto}
+header.masthead{padding-block:56px 28px;border-bottom:2px solid var(--accent)}
+.eyebrow{font-family:var(--sans);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,5vw,46px);line-height:1.1;margin:10px 0 14px;text-wrap:balance}
+.lede{font-size:19px;color:var(--muted);margin:0;max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:18px;font-size:14px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+nav.toc{margin:28px 0 0;padding:16px 18px;background:var(--surface);border-radius:6px}
+nav.toc ol{margin:6px 0 0;padding-left:22px;columns:2;column-gap:28px;font-size:15px}
+nav.toc li{break-inside:avoid;margin:2px 0}
+nav.toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule)}
+nav.toc a:hover,nav.toc a:focus-visible{border-color:var(--accent)}
+h2{font-family:var(--serif);font-weight:600;font-size:28px;line-height:1.2;margin:56px 0 12px;text-wrap:balance;scroll-margin-top:24px}
+h2 .num{color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:500;display:block;margin-bottom:4px;letter-spacing:.04em}
+h3{font-family:var(--sans);font-weight:600;font-size:18px;margin:28px 0 8px}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:24px}
+li{margin:4px 0}
+li>ul{margin-top:4px}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:3px}
+pre{font-family:var(--mono);font-size:13.5px;line-height:1.5;background:var(--code-bg);padding:14px 16px;border-radius:6px;overflow-x:auto;margin:0 0 16px}
+pre code{background:none;padding:0;font-size:inherit}
+.tablewrap{overflow-x:auto;margin:0 0 18px}
+table{border-collapse:collapse;width:100%;font-size:15px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--rule)}
+th{font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--rule)}
+td:first-child{font-weight:600}
+.tag{display:inline-block;font-family:var(--mono);font-size:12px;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.tag.keep{background:var(--accent-soft);color:var(--accent)}
+.tag.new{background:var(--warn-soft);color:var(--warn)}
+.tag.ext{background:var(--surface);color:var(--ink);border:1px solid var(--rule)}
+.decisions{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:12px}
+.decisions li{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:14px 16px;background:var(--surface);border-radius:6px;margin:0}
+.decisions .k{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500;padding-top:3px}
+.decisions b{display:block;margin-bottom:3px}
+.decisions span{color:var(--muted);font-size:15px}
+.callout{border-left:3px solid var(--accent);background:var(--surface);padding:12px 16px;border-radius:0 6px 6px 0;margin:18px 0}
+.callout.warn{border-color:var(--warn)}
+.callout p:last-child{margin-bottom:0}
+.callout .label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--accent);margin-bottom:4px}
+.callout.warn .label{color:var(--warn)}
+figure{margin:18px 0 22px}
+figure pre.mermaid{background:var(--surface);padding:14px;overflow-x:auto;text-align:center}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.steps{counter-reset:step;list-style:none;padding:0;margin:0 0 18px}
+.steps li{counter-increment:step;display:grid;grid-template-columns:40px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule);margin:0}
+.steps li::before{content:counter(step,decimal-leading-zero);font-family:var(--mono);color:var(--accent);font-size:14px;padding-top:3px}
+.steps b{display:block}
+.steps span{color:var(--muted);font-size:15px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:0 0 18px}
+.grid2 .cell{padding:14px 16px;border:1px solid var(--rule);border-radius:6px}
+.grid2 .cell h4{margin:0 0 6px;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.grid2 .cell ul{margin:0;padding-left:18px;font-size:15px}
+footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);font-size:14px;color:var(--muted)}
+@media (max-width:520px){nav.toc ol{columns:1} body{font-size:16px}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="page">
+<header class="masthead">
+  <div class="eyebrow">Design document · draft 2.1</div>
+  <h1>DartBrains Grader</h1>
+  <p class="lede">A multi-tenant, FERPA-appropriate grading service for marimo assignments, built on MoGrader's grading engine and Dartmouth's SAML identity.</p>
+  <div class="meta">
+    <div><b>Author</b> Luke Chang, with Claude</div>
+    <div><b>Date</b> 2026-09-11</div>
+    <div><b>Supersedes</b> Initial Specification (draft 1)</div>
+    <div><b>Status</b> for discussion</div>
+  </div>
+  <nav class="toc" aria-label="Contents">
+    <div class="eyebrow">Contents</div>
+    <ol>
+      <li><a href="#decisions">Decisions in brief</a></li>
+      <li><a href="#audit">What the audits found</a></li>
+      <li><a href="#mograder">MoGrader as engine, not server</a></li>
+      <li><a href="#architecture">System architecture</a></li>
+      <li><a href="#identity">Identity and the notebook login handshake</a></li>
+      <li><a href="#submissions">Submission model</a></li>
+      <li><a href="#data">Data model</a></li>
+      <li><a href="#tenancy">Tenancy, roles, isolation</a></li>
+      <li><a href="#lifecycle">Assignment lifecycle</a></li>
+      <li><a href="#grading">Grading modes</a></li>
+      <li><a href="#ui">Instructor dashboard and student portal</a></li>
+      <li><a href="#canvas">Canvas export</a></li>
+      <li><a href="#ferpa">FERPA and security controls</a></li>
+      <li><a href="#client">Client library and dartbrains-tools</a></li>
+      <li><a href="#spikes">Spikes to run before building</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#changes">Changes from draft 1</a></li>
+    </ol>
+  </nav>
+</header>
+
+<h2 id="decisions"><span class="num">§1</span>Decisions in brief</h2>
+<p>Draft 1 asked for an audit of MoGrader before any infrastructure work. That audit is done (§2) and it changes the shape of the project in one important way: MoGrader's <em>grading engine</em> is excellent and reusable, but its <em>server, identity, and gradebook</em> layers are built for a single course with shared-secret tokens. The recommendation is to depend on the former and replace the latter.</p>
+<ul class="decisions">
+  <li><span class="k">D1</span><div><b>Use MoGrader as a Python library, not as the server.</b><span>Import its authoring markers, notebook generation, check runtime, sandboxed autograde runner, and integrity checks. Do not fork its HTTPS server, hub, or SQLite gradebook. Contribute small upstream PRs where the engine needs a hook.</span></div></li>
+  <li><span class="k">D2</span><div><b>One new FastAPI service owns identity, tenancy, submissions, grades, and audit.</b><span>PostgreSQL from day one. Immutable per-attempt submissions. Server-side authorization on every route. A worker container runs autograding.</span></div></li>
+  <li><span class="k">D3</span><div><b>Dartmouth SAML in the browser; a device-style handshake for notebooks.</b><span>The notebook never touches credentials or SAML. It requests a login code, the student signs in through Dartmouth in a normal browser tab, and the notebook receives a short-lived token bound to the verified NetID.</span></div></li>
+  <li><span class="k">D4</span><div><b>The notebook snapshot is the artifact; the question is the grading unit.</b><span>Every Submit uploads the whole notebook and names the question being submitted. This gives MoGrader's runner what it needs (hidden-test reinjection, cell-hash integrity) while grades, attempts, and feedback stay per question.</span></div></li>
+  <li><span class="k">D5</span><div><b>Instructor and student UIs are one Svelte 5 single-page app served on the same origin as the API.</b><span>marimo stays in the notebook where it belongs. The dashboards need fast filtering, keyboard-driven grading, and a triage view that updates as submissions land; a purpose-built reactive frontend does that better than a mounted marimo app. Rendered student notebooks come from the worker as HTML artifacts, so the frontend never runs Python.</span></div></li>
+  <li><span class="k">D6</span><div><b>Generic core, DartBrains as the first tenant.</b><span>The service and its client library carry no course-specific code. dartbrains-tools gains a thin module that preconfigures the server URL and course and exposes the student-facing widgets.</span></div></li>
+</ul>
+
+<h2 id="audit"><span class="num">§2</span>What the audits found</h2>
+<h3>Dartmouth SSO, as implemented in pbs_knowledge</h3>
+<p>The working implementation on dartmouthpbs.org is <b>SAML 2.0</b> against Dartmouth's Shibboleth IdP, not OIDC or CAS. The details that matter for a new service:</p>
+<ul>
+  <li>IdP entity <code>urn:mace:incommon:dartmouth.edu</code>, SSO at <code>https://login.dartmouth.edu/cas/idp/profile/SAML2/POST/SSO</code>, logout at <code>https://logout.dartmouth.edu</code>. Duo runs inside the IdP; the app does nothing for MFA.</li>
+  <li>NetID comes from <code>eduPersonPrincipalName</code> (split on <code>@</code>, lowercased), not from NameID. Affiliation from <code>eduPersonAffiliation</code>. Display name, given name, and surname are available.</li>
+  <li>IdP quirks that must be replicated: the <em>assertion</em> is signed, the response envelope is not; allow about two minutes of clock skew; disable RequestedAuthnContext; sign the AuthnRequest.</li>
+  <li>The SP metadata file, the IdP metadata with its signing certificate, and the email template used to register with Dartmouth IT are all reusable as-is. A new SP entity (for example <code>https://grader.dartbrains.org</code>) must be registered with IT; budget a week or two of turnaround.</li>
+  <li>Do not port the Firebase custom-token session or the localStorage token. Use an HttpOnly session cookie for web UIs and a separate short-lived bearer token for notebooks.</li>
+</ul>
+
+<h3>MoGrader (jameskermode/mograder, 0.3.3, MIT)</h3>
+<p>Single-author, actively developed (36 releases since March 2026), Python 3.11+, tested on three platforms. Its pieces, and their fit:</p>
+<div class="tablewrap"><table>
+<tr><th>Capability</th><th>Where</th><th>Fit for this spec</th></tr>
+<tr><td>Authoring markers and notebook generation</td><td><code>grading/cells.py</code></td><td><span class="tag keep">inherit</span> nbgrader-style <code>### BEGIN SOLUTION</code>, hidden tests, marks cell, PEP 723 metadata with cell hashes injected into the student version</td></tr>
+<tr><td>Formative checks in the notebook</td><td><code>runtime.py</code></td><td><span class="tag keep">inherit</span> <code>check("Q1: label", [(cond, msg, weight), ...])</code> renders callouts and writes a JSONL sidecar the autograder reads</td></tr>
+<tr><td>Sandboxed autograde runner</td><td><code>grading/runner.py</code>, <code>integrity.py</code>, <code>safety.py</code></td><td><span class="tag keep">inherit</span> rlimits, wall-clock kill, optional bubblewrap with no network, AST deny-list, hidden-test and tampered-cell reinjection, partial credit by weight</td></tr>
+<tr><td>Grader dashboard (marimo app)</td><td><code>grader/app.py</code></td><td><span class="tag ext">adapt</span> single 0 to 100 slider plus free text; no rubric items; assumes the file-based course directory</td></tr>
+<tr><td>Feedback HTML and CSV</td><td><code>grading/feedback.py</code></td><td><span class="tag ext">adapt</span> CSV columns are Moodle-shaped; Canvas explicitly unsupported</td></tr>
+<tr><td>HTTPS assignment server and hub</td><td><code>transport/https_server.py</code>, <code>hub/</code></td><td><span class="tag new">replace</span> file storage, one course per process, per-user marimo subprocesses we do not need</td></tr>
+<tr><td>Identity</td><td><code>core/auth.py</code></td><td><span class="tag new">replace</span> non-expiring HMAC tokens, one shared <code>__instructor__</code> identity, no TA role; the injected submit cell sends no Authorization header at all</td></tr>
+<tr><td>Gradebook</td><td><code>grading/gradebook.py</code></td><td><span class="tag new">replace</span> hand-written SQLite, one row per student per assignment, no attempts, no courses, no audit</td></tr>
+</table></div>
+<p>Classification against draft 1's requirements: inherited unchanged are the check/submit distinction, hybrid grading, and the autograde mechanics. Small extensions are stable question IDs (label-prefix convention plus cell hashes), a TA role, the triage dashboard, and Canvas columns. Substantial new work is SSO-bound identity, multi-tenancy, attempts in the database, rubrics, PostgreSQL, and audit logging. That list is exactly the boundary in D1.</p>
+
+<h2 id="mograder"><span class="num">§3</span>MoGrader as engine, not server</h2>
+<p>Forking a 4,000-line CLI that ships a release a week means carrying merges forever. The parts we need are importable modules with stable inputs (a notebook file, a course directory layout) and outputs (a JSONL sidecar, a results dict). The parts we would change most are the ones we would not use anyway.</p>
+<div class="grid2">
+  <div class="cell"><h4>Import from mograder</h4><ul><li><code>mograder.grading.cells</code>: generate student notebooks, compute cell hashes</li><li><code>mograder.runtime.check</code> and <code>Grader</code>: in-notebook checks</li><li><code>mograder.grading.runner</code> and <code>integrity</code>: autograde a submission in a sandbox</li><li><code>mograder.grading.feedback</code>: annotated feedback HTML</li></ul></div>
+  <div class="cell"><h4>Build new</h4><ul><li>FastAPI service: auth, tenancy, submissions, grades, audit, exports</li><li>PostgreSQL schema (SQLAlchemy 2, Alembic)</li><li>Worker that materializes a submission into MoGrader's expected layout and runs the runner</li><li>Client package with the login handshake and submit widget</li></ul></div>
+  <div class="cell"><h4>Borrow ideas from mograder</h4><ul><li>Grader app navigation (prev/next, keyboard flow, feedback minimum) informs the Svelte grading view; no code is reused</li><li>Feedback HTML export runs in the worker and becomes the rendered view the frontend embeds</li></ul></div>
+  <div class="cell"><h4>Contribute upstream</h4><ul><li>Pluggable transport factory (currently hard-coded to https and moodle)</li><li>Authorization header on the injected submit cell</li><li>Per-question grouping of check results in the sidecar</li><li>Runner entry point that takes paths explicitly instead of a course directory</li></ul></div>
+</div>
+<div class="callout"><div class="label">Risk to watch</div><p>MoGrader's runner assumes the on-disk layout <code>submitted/&lt;assignment&gt;/&lt;user&gt;.py</code> and reads instructor sources from the course directory. The worker will materialize this layout per job in a temp directory. Pin the mograder version in the worker image and run the engine's own test suite against each bump.</p></div>
+
+<h2 id="architecture"><span class="num">§4</span>System architecture</h2>
+<figure>
+<pre class="mermaid">
+flowchart LR
+  subgraph exec["Execution (student's choice)"]
+    W["Browser / WASM"]
+    M["MoLab"]
+    D["Discovery / OOD"]
+  end
+  NB["marimo assignment<br/>+ client widget"]
+  W --> NB
+  M --> NB
+  D --> NB
+  subgraph svc["grader.dartbrains.org (Docker Compose)"]
+    NG["nginx (TLS)"]
+    UI["grader-ui<br/>Svelte 5 SPA (static)"]
+    API["grader-web<br/>FastAPI JSON API"]
+    WK["grader-worker<br/>MoGrader runner in sandbox"]
+    PG[("PostgreSQL")]
+    OBJ[("artifact store<br/>encrypted volume")]
+  end
+  NB -- "HTTPS, bearer token" --> NG --> API
+  API <--> PG
+  API <--> OBJ
+  WK <--> PG
+  WK <--> OBJ
+  IDP["Dartmouth SAML IdP<br/>login.dartmouth.edu + Duo"]
+  API <-- "SAML, browser only" --> IDP
+  INS["Instructor / TA browser"] --> NG
+  STU["Student browser"] --> NG
+  NG --> UI
+  UI -- "/api, session cookie" --> API
+</pre>
+<figcaption>Execution and grading are independent. The only requirement on an execution environment is that the student's browser can reach the grader over HTTPS.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+<tr><th>Component</th><th>Responsibility</th><th>Notes</th></tr>
+<tr><td>grader-ui</td><td>Instructor, TA, and student interfaces</td><td>Svelte 5 with runes, TypeScript, Vite. Built to static files and served by nginx on the same origin as the API, so the session cookie is first-party and no CORS is involved. Typed API client generated from FastAPI's OpenAPI schema.</td></tr>
+<tr><td>grader-web</td><td>JSON API, SAML SP, device handshake, session cookies, server-sent events for live status</td><td>FastAPI, python3-saml, SQLAlchemy 2, Alembic. Stateless; scale horizontally behind nginx. The API is the only contract; the SPA, the notebook widget, and the publish CLI are all clients of it.</td></tr>
+<tr><td>grader-worker</td><td>Pulls grading jobs, materializes the submission, runs MoGrader's runner with network disabled, writes results, and renders the submitted notebook to HTML for the grading view</td><td>Job queue in PostgreSQL (<code>SELECT ... FOR UPDATE SKIP LOCKED</code>); Redis is unnecessary at this scale. Datasets pre-cached in a volume because the sandbox has no network.</td></tr>
+<tr><td>PostgreSQL</td><td>All records; the system of record for grades</td><td>Encrypted volume, nightly encrypted backups, point-in-time recovery if the host supports it.</td></tr>
+<tr><td>Artifact store</td><td>Notebook snapshots, grader logs, feedback HTML, content-addressed by SHA-256</td><td>Local encrypted volume for v1; the interface is S3-shaped so MinIO or a Dartmouth object store can replace it without code changes.</td></tr>
+<tr><td>nginx</td><td>TLS termination, CSP allowing form posts from login.dartmouth.edu, rate limiting</td><td>Copy the dartmouthpbs.org config; it already has the SAML-compatible CSP.</td></tr>
+</table></div>
+
+<h2 id="identity"><span class="num">§5</span>Identity and the notebook login handshake</h2>
+<p>Two kinds of principal talk to the service, and they authenticate differently.</p>
+<h3>Web sessions (instructor, TA, student portals)</h3>
+<p>Standard SAML SP flow: <code>GET /auth/login</code> redirects to Dartmouth, <code>POST /auth/saml/acs</code> validates the assertion, upserts the user by NetID, and sets an HttpOnly, Secure, SameSite=Lax session cookie backed by a server-side session row. Roles are never taken from SAML; they are looked up per offering from the enrollments table (§8).</p>
+<h3>Notebooks (the hard case)</h3>
+<p>The notebook kernel may be in a MoLab container, in Pyodide inside the student's browser, or on a Discovery compute node. None of those can complete a SAML redirect, and the notebook must never see credentials. The shape that works everywhere is the OAuth device authorization flow, run by our own server.</p>
+<figure>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant NB as Notebook widget<br/>(JS in student's browser)
+  participant API as grader-web
+  participant IDP as Dartmouth SAML + Duo
+  NB->>API: POST /auth/device
+  API-->>NB: device_code, user_code, verify_url, expires_in
+  NB->>NB: open verify_url in new tab (from click)
+  NB->>API: GET /auth/device/verify?code=…
+  API->>IDP: SAML AuthnRequest (RelayState = device_code)
+  IDP-->>API: POST assertion (ePPN, affiliation)
+  API->>API: bind device_code → NetID; page says "you can close this tab"
+  loop every 3 s until approved or expired
+    NB->>API: POST /auth/device/token
+  end
+  API-->>NB: access_token (JWT, 8 h, sub = NetID)
+  NB->>API: POST /submissions  Authorization: Bearer …
+</pre>
+<figcaption>The notebook only ever holds a short-lived token minted by the grader. Dartmouth credentials and the SAML assertion never leave the browser tab and the server.</figcaption>
+</figure>
+<ul>
+  <li><b>Where the HTTP calls originate.</b> The widget is an anywidget, so its JavaScript runs in the student's browser regardless of where the kernel is. Run the handshake and the submit request from JavaScript. This is the one path that behaves identically in WASM, MoLab, and Discovery, and it sidesteps the question of whether compute nodes have outbound internet. The kernel's job is to assemble the payload and hand it to the widget through the anywidget model.</li>
+  <li><b>Token shape.</b> JWT signed with an Ed25519 key held by the server. Claims: <code>sub</code> (NetID), <code>scope: notebook</code>, <code>exp</code> (8 hours), <code>jti</code> for revocation. No refresh token in v1; when it expires the button says "Sign in again" and the handshake takes one click plus Duo.</li>
+  <li><b>Where the token lives.</b> In the widget's in-memory state, mirrored to the kernel so <code>submit()</code> can be called programmatically. Optionally cached in localStorage on the notebook's origin so a page reload does not force a new Duo prompt within the 8 hours. It is never written into the notebook file.</li>
+  <li><b>CORS.</b> Allowlist the origins a notebook can run in: <code>https://dartbrains.org</code>, <code>https://molab.marimo.io</code>, the Dartmouth Open OnDemand host, and <code>http://localhost:*</code> for local marimo. Everything else is refused.</li>
+  <li><b>Popup blockers.</b> The verification tab must be opened synchronously from the button's click handler. The widget also shows the URL and the user code as text so a student can open it manually.</li>
+</ul>
+
+<h2 id="submissions"><span class="num">§6</span>Submission model</h2>
+<p>Draft 1 asked for per-question submission. MoGrader grades whole notebooks, and it needs the whole notebook to reinject hidden tests and verify cell hashes. Both are satisfied by making the <em>notebook snapshot</em> the stored artifact and the <em>question</em> the unit of attempts, scores, and feedback.</p>
+<h3>Check versus Submit</h3>
+<ul>
+  <li><b>Check</b> runs entirely in the kernel through MoGrader's <code>check()</code>. It never blocks on the network. If the student is signed in, the widget also posts a small check event (question, check key, pass or fail) so the instructor dashboard can say "38% of the class is failing the design-matrix check." If the student is not signed in, nothing is sent.</li>
+  <li><b>Submit</b> requires a token. It records an immutable attempt and enqueues autograding. Feedback for autograded questions appears in the widget within seconds; manually graded questions show "Submitted, awaiting grading" until an instructor scores them.</li>
+</ul>
+<h3>Payload</h3>
+<pre><code>POST /v1/submissions
+Authorization: Bearer &lt;notebook token&gt;
+
+{
+  "assignment_version": "glm@3",          # from PEP 723 metadata MoGrader injects
+  "question_id": "glm-q03",
+  "notebook": "&lt;full marimo .py source&gt;",
+  "check_results": [...],                  # sidecar JSONL from this kernel, advisory only
+  "outputs": {"glm-q03": {"html": "...", "figures": [...]}},   # optional, size-capped
+  "client": {"package": "dartbrains-tools", "version": "0.2.0", "env": "molab"}
+}</code></pre>
+<p>The server adds, and the client cannot set: NetID (from the token), enrollment, server timestamp, attempt number (next in sequence for that enrollment and question), submission ID, artifact hash, and grading status. Client-reported check results are stored for diagnostics but never used for a grade; the worker recomputes everything.</p>
+<h3>Attempt policy</h3>
+<p>Per assignment, the instructor sets: attempts allowed (unlimited, N, or one), which attempt counts (latest, highest, first, or instructor-selected), due date and late policy, and whether checks are logged. These are settings on the assignment, not code in the notebook, so they can change without republishing.</p>
+<h3>Reading the notebook's own source</h3>
+<p>The kernel must read its own file to build the payload. In local marimo and MoLab this is <code>__file__</code> or <code>mo.notebook_location()</code>. In WASM the file lives in the Pyodide virtual filesystem. This needs a spike in all three environments (§15) before the widget is finalized.</p>
+
+<h2 id="data"><span class="num">§7</span>Data model</h2>
+<figure>
+<pre class="mermaid">
+erDiagram
+  users ||--o{ enrollments : has
+  courses ||--o{ offerings : has
+  offerings ||--o{ sections : has
+  offerings ||--o{ enrollments : has
+  sections o|--o{ enrollments : groups
+  offerings ||--o{ assignments : has
+  assignments ||--o{ assignment_versions : versions
+  assignments ||--o{ questions : contains
+  questions o|--o| rubrics : uses
+  enrollments ||--o{ submissions : makes
+  assignment_versions ||--o{ submissions : "submitted against"
+  questions ||--o{ submissions : "for"
+  submissions ||--|| artifacts : snapshot
+  submissions ||--o{ grader_runs : graded_by
+  submissions ||--o{ scores : scored
+  enrollments ||--o{ check_events : emits
+  users ||--o{ grade_audit : acts
+  users {
+    uuid id PK
+    text netid UK
+    text display_name
+    bool platform_admin
+  }
+  enrollments {
+    uuid id PK
+    enum role "student|ta|instructor"
+    enum status "active|dropped"
+  }
+  assignments {
+    text slug
+    jsonb settings "due, attempts, policy, envs"
+  }
+  assignment_versions {
+    int version
+    uuid instructor_source_artifact
+    uuid student_source_artifact
+    jsonb cell_hashes
+  }
+  questions {
+    text qid "stable, e.g. glm-q03"
+    numeric max_points
+    enum grading_mode "auto|manual|hybrid"
+    jsonb check_keys
+  }
+  submissions {
+    int attempt_no
+    timestamptz submitted_at "server clock"
+    jsonb client_meta
+    enum status "received|grading|graded|failed"
+  }
+  scores {
+    numeric auto_points
+    numeric manual_points
+    jsonb rubric_scores
+    text feedback
+    bool is_final
+  }
+  grade_audit {
+    text entity
+    jsonb before
+    jsonb after
+    text reason
+  }
+</pre>
+<figcaption>Every row that carries a grade points back to an immutable submission and an immutable assignment version, so any grade can be reproduced and any change explained.</figcaption>
+</figure>
+<ul>
+  <li><b>Immutability.</b> <code>submissions</code>, <code>artifacts</code>, <code>grader_runs</code>, and <code>assignment_versions</code> are insert-only. Application code has no UPDATE path for them; a database role without UPDATE on those tables enforces it.</li>
+  <li><b>Official grade.</b> The grade for (enrollment, question) is derived from the attempt policy over that student's submissions and their final <code>scores</code> row. Store it in a small <code>question_grades</code> table recomputed by trigger or job, so exports and dashboards do not re-derive policy each time, and so an instructor can pin a specific attempt.</li>
+  <li><b>Audit.</b> Any write to <code>scores</code>, <code>question_grades</code>, <code>enrollments</code>, or assignment settings inserts a <code>grade_audit</code> row with actor, before, after, and reason. This is the FERPA audit trail and the grading-dispute record.</li>
+  <li><b>Minimization.</b> <code>users</code> holds NetID, an optional display name from SAML, and nothing else. No email column; NetID plus <code>@dartmouth.edu</code> reconstructs it when an export needs it. Affiliation is used at login for a sanity check and not stored.</li>
+  <li><b>Retention.</b> A per-offering <code>retention_until</code> drives a job that deletes artifacts and check events after the retention window while keeping <code>question_grades</code> and the audit log. Dartmouth's records policy sets the window; default to five years after the term ends until told otherwise.</li>
+</ul>
+
+<h2 id="tenancy"><span class="num">§8</span>Tenancy, roles, isolation</h2>
+<p>The hierarchy from draft 1 stands: platform, course, offering (a term), section, enrollment. Roles attach to an enrollment, so the same person can be an instructor in one offering and a student in another, and a TA's reach is scoped to their sections.</p>
+<div class="tablewrap"><table>
+<tr><th>Action</th><th>Student</th><th>TA</th><th>Instructor</th><th>Platform admin</th></tr>
+<tr><td>Submit, see own attempts and feedback</td><td>own</td><td>own (if also enrolled)</td><td>own</td><td>—</td></tr>
+<tr><td>View submissions and grade</td><td>—</td><td>assigned sections</td><td>whole offering</td><td>—</td></tr>
+<tr><td>Change a final grade, pin an attempt</td><td>—</td><td>if offering allows TA finalization</td><td>yes, audited</td><td>—</td></tr>
+<tr><td>Publish assignment versions, edit settings, rubrics</td><td>—</td><td>—</td><td>yes</td><td>—</td></tr>
+<tr><td>Manage roster, sections, TAs</td><td>—</td><td>—</td><td>yes</td><td>yes</td></tr>
+<tr><td>Export gradebook</td><td>—</td><td>—</td><td>yes, audited</td><td>—</td></tr>
+<tr><td>Create courses and offerings, assign instructors, SAML config</td><td>—</td><td>—</td><td>—</td><td>yes</td></tr>
+<tr><td>Read student work in an offering they are not enrolled in</td><td>—</td><td>—</td><td>—</td><td>no, by design</td></tr>
+</table></div>
+<p>Enforcement is one FastAPI dependency, <code>require(offering_id, roles)</code>, that resolves the caller's enrollment and refuses otherwise. Every query that touches student data takes an offering ID from that dependency, never from the request body. Platform admins deliberately cannot read student work; if that is ever needed it should be an explicit, audited break-glass action.</p>
+<h3>Roster import from Canvas and Banner</h3>
+<p>Rosters should almost never be typed in. The import pipeline has one internal shape, a list of (NetID, display name, section, role), and a set of source adapters that produce it. Every import is a preview first: the instructor sees adds, drops, and section moves before confirming, and the confirmation is audited.</p>
+<div class="tablewrap"><table>
+<tr><th>Source</th><th>How it gets in</th><th>Matching key</th><th>Availability</th></tr>
+<tr><td>Canvas gradebook export</td><td>Instructor exports the gradebook CSV from Canvas and drops it on the roster page. Columns: Student, ID, SIS User ID, SIS Login ID, Section.</td><td>SIS Login ID (NetID at Dartmouth; confirm in spike 6)</td><td>Works today for any instructor with no IT involvement. Also seeds the Canvas assignment IDs needed for grade export (§12).</td></tr>
+<tr><td>Canvas API</td><td>Instructor pastes a personal access token generated in their own Canvas profile; the grader calls the course's enrollments endpoint and stores nothing but the resulting roster. The token is kept encrypted, per instructor, and can be revoked.</td><td>login_id from the enrollment record</td><td>Depends on Dartmouth allowing user-generated tokens; the spec notes institutional API access is not available, but personal tokens are often still enabled. Check once; if blocked, the CSV adapter covers it.</td></tr>
+<tr><td>Banner class list</td><td>Instructor downloads the class list from Banner self-service (Excel or CSV) and uploads it. Column names differ from Canvas, so this adapter maps them.</td><td>NetID if present, else Dartmouth email local part, else Banner ID with a manual match step</td><td>No API access is realistic; Dartmouth's registrar data is not exposed to departmental apps. File upload is the honest path.</td></tr>
+<tr><td>Join code</td><td>Student signs in and enters an offering code; instructor approves or auto-approves.</td><td>NetID from SAML</td><td>For open courses such as dartbrains.org and for late adds between imports.</td></tr>
+<tr><td>LTI 1.3 Names and Roles service</td><td>If Dartmouth ever registers the grader as an LTI tool, roster sync and grade passback come for free.</td><td>lis_person_sourcedid</td><td>Future; the adapter interface leaves room for it.</td></tr>
+</table></div>
+<p>Drops never delete anything. A dropped enrollment flips to <code>status: dropped</code>, keeps its submissions and grades, and disappears from the default roster view.</p>
+
+<h2 id="lifecycle"><span class="num">§9</span>Assignment lifecycle</h2>
+<ol class="steps">
+  <li><div><b>Author</b><span>The instructor writes one marimo notebook using MoGrader markers. Each question is a <code>check("glm-q03: Design matrix", [...])</code> call plus a marks entry. The label prefix is the stable question ID; the visible title after the colon can change freely.</span></div></li>
+  <li><div><b>Publish</b><span><code>grader publish glm.py --offering neuroimaging/2026-fall</code> signs the instructor in via the same device handshake, runs MoGrader's generation to produce the student version, uploads both sources as artifacts, and registers a new <code>assignment_versions</code> row with the cell hashes and the question list parsed from the marks cell.</span></div></li>
+  <li><div><b>Distribute</b><span>The service serves the student version at a stable URL. dartbrains.org links to it through marimo-book's launch buttons: MoLab, WASM, or an Open OnDemand launcher, as permitted by the assignment's <code>environments</code> setting. The student version already carries <code>assignment_version</code> in its PEP 723 metadata, so the widget knows what it is submitting without any student input.</span></div></li>
+  <li><div><b>Work, check, submit</b><span>Students iterate with Check, sign in once, and Submit per question. Autograded questions return feedback in the widget; manual questions show their queue status.</span></div></li>
+  <li><div><b>Grade</b><span>The worker autogrades on arrival. Instructors and TAs score manual and hybrid questions in the grader app. Grades finalize per the attempt policy.</span></div></li>
+  <li><div><b>Revise</b><span>Republishing creates version N+1. Old submissions stay bound to the version they were made against and are regraded only if the instructor explicitly asks, with the audit log recording it.</span></div></li>
+  <li><div><b>Reuse</b><span>An assignment can be copied into a new offering. The copy starts at version 1 in the new offering; nothing in the source offering changes.</span></div></li>
+</ol>
+
+<h2 id="grading"><span class="num">§10</span>Grading modes</h2>
+<h3>Deterministic autograding</h3>
+<p>The worker writes the submission into a temp course directory in the layout MoGrader expects, reinjects hidden tests and the instructor's check cells from the pinned assignment version, and runs the runner under bubblewrap with no network, rlimits, and a wall-clock cap. Results are parsed from the sidecar, grouped by question, and written as a <code>grader_runs</code> row plus an <code>auto_points</code> score. Because the sandbox has no network, any dataset an assignment needs must be pre-cached on the worker volume; the publish step should list required datasets so the cache can be warmed.</p>
+<h3>Manual and rubric grading</h3>
+<p>Rubrics are a list of items with points and a description, stored as JSON on a <code>rubrics</code> row and referenced by questions. The grader app shows the student's code and rendered output for the question, the rubric as checkboxes or point fields, and a feedback box. MoGrader's app has the navigation and layout; the rubric panel is new.</p>
+<h3>Hybrid</h3>
+<p><code>total = auto_points + manual_points</code>, with <code>max_points</code> split declared on the question. This is what MoGrader already does with its slider; it maps directly.</p>
+<h3>AI-assisted suggestions (later)</h3>
+<p>Model this as another <code>grader_runs</code> kind that writes <code>suggested_points</code> and <code>suggested_feedback</code> on the score row. Suggestions are never final without a human accepting them, and acceptance is audited like any grade change. Before building it, confirm which model vendor Dartmouth has approved for student work under FERPA; sending submissions to an unapproved API is a compliance problem, not a technical one.</p>
+
+<h2 id="ui"><span class="num">§11</span>Instructor dashboard and student portal</h2>
+<p>One Svelte 5 application, built with runes and TypeScript, served as static files from the same origin as the API. It signs in through the same SAML flow (a redirect to <code>/auth/login</code> and back), holds no token in JavaScript, and talks to <code>/api</code> with the HttpOnly session cookie plus a CSRF header. Role-based routing decides which views a user sees, but every view is backed by an API call that enforces the same rule server-side.</p>
+<h3>Why not marimo apps for this</h3>
+<ul>
+  <li>A grading queue is a keyboard-driven, state-heavy UI: next student, tab between rubric items, type feedback, submit, repeat. That wants local reactive state and optimistic updates, which runes give directly and a kernel round-trip per interaction does not.</li>
+  <li>A mounted marimo app holds a Python kernel per browser session. Fine for ten instructors; awkward for a whole class opening the student portal at once.</li>
+  <li>pbs_knowledge already established a Svelte 5 + Vite frontend with SAML sign-in and role-aware routing. Its auth store and route guards carry over; only the backend session model changes (cookie instead of Firebase token).</li>
+</ul>
+<h3>How the frontend shows a notebook without running Python</h3>
+<p>When the worker grades a submission it also runs <code>marimo export html</code> on the snapshot and stores the result as an artifact. The grading view embeds that HTML in a sandboxed iframe with no scripts and no network, scrolled to the question being graded, next to the rubric panel. Students see the same rendering in their attempt history. Nothing in the frontend ever executes student code.</p>
+<h3>Views</h3>
+<div class="tablewrap"><table>
+<tr><th>Route</th><th>Who</th><th>What it does</th></tr>
+<tr><td><code>/</code></td><td>everyone</td><td>Offerings you belong to, with your role in each.</td></tr>
+<tr><td><code>/o/:offering</code></td><td>instructor, TA</td><td>Triage view (below), then the roster grid.</td></tr>
+<tr><td><code>/o/:offering/grade/:question</code></td><td>instructor, TA</td><td>Grading queue: rendered notebook, rubric, feedback, keyboard shortcuts, progress.</td></tr>
+<tr><td><code>/o/:offering/students/:netid</code></td><td>instructor, TA</td><td>One student's attempt history across assignments.</td></tr>
+<tr><td><code>/o/:offering/assignments</code></td><td>instructor</td><td>Versions, settings (due date, attempts, policy, environments), rubrics, environments allowed.</td></tr>
+<tr><td><code>/o/:offering/roster</code></td><td>instructor</td><td>Import from Canvas or Banner with preview, sections, TA assignment.</td></tr>
+<tr><td><code>/o/:offering/export</code></td><td>instructor</td><td>Canvas gradebook CSV; audited.</td></tr>
+<tr><td><code>/me/:offering</code></td><td>student</td><td>Assignments, status, grade, every attempt with feedback. This is where the notebook's "View feedback" button lands.</td></tr>
+<tr><td><code>/admin</code></td><td>platform admin</td><td>Courses, offerings, instructors, SAML and retention settings. No student data.</td></tr>
+</table></div>
+<p>Live updates use one server-sent events stream per offering. The triage counts and the roster grid update as submissions arrive and grading completes, without polling.</p>
+<h3>The triage view</h3>
+<p>The instructor's landing page answers "who needs my attention." Concretely, in this order:</p>
+<ul>
+  <li>Submissions awaiting manual grading, oldest first, grouped by question.</li>
+  <li>Students with no activity in seven days while an assignment is open.</li>
+  <li>Checks failing for more than a third of the class in the last 48 hours, with the check key and its failure message.</li>
+  <li>Autograder failures (timeouts, crashes) that need an instructor to look at the notebook.</li>
+</ul>
+<p>Below that, the roster grid from draft 1: one row per student, one column per question, cell states not started, checking, submitted, graded with points, with last activity. A student row opens their attempt history; a question column opens its distribution.</p>
+<h3>Student portal</h3>
+<p>One page per offering: assignments, status, grade, and, per assignment, every attempt with its feedback. This is where feedback survives after a MoLab or WASM session is gone. The same page is what the "View feedback" button in the notebook opens.</p>
+
+<h2 id="canvas"><span class="num">§12</span>Canvas export</h2>
+<p>Canvas's gradebook import matches rows on <code>SIS Login ID</code>, which at Dartmouth is the NetID, and needs the assignment column header in the form <code>Assignment Name (12345)</code> with Canvas's internal ID. The instructor exports their current Canvas gradebook once, uploads it to the grader, and the grader emits a CSV with the same student rows and the selected assignment columns filled in. No Canvas credentials are stored, and the LTI path stays open for later. Verify the SIS Login ID assumption against a real Dartmouth Canvas export before shipping.</p>
+
+<h2 id="ferpa"><span class="num">§13</span>FERPA and security controls</h2>
+<div class="tablewrap"><table>
+<tr><th>Control</th><th>Implementation</th></tr>
+<tr><td>Authentication</td><td>Dartmouth SAML with Duo for every human; short-lived notebook tokens minted only after SAML; no local passwords, no API keys for students.</td></tr>
+<tr><td>Authorization</td><td>Enrollment-scoped dependency on every route; platform admins cannot read student work; TA access limited to sections.</td></tr>
+<tr><td>Data minimization</td><td>NetID and optional display name only; no email column; affiliation not stored; no PII in logs (log user IDs, never NetIDs, at INFO).</td></tr>
+<tr><td>Transport</td><td>TLS 1.2+ everywhere; HSTS; CSP permitting form posts only from login.dartmouth.edu.</td></tr>
+<tr><td>Storage</td><td>Encrypted volumes for PostgreSQL and artifacts; encrypted, access-controlled backups; restore tested each term.</td></tr>
+<tr><td>Audit</td><td>Append-only <code>grade_audit</code> for grade, roster, and export actions; login events retained 1 year.</td></tr>
+<tr><td>Sandboxing</td><td>Student code runs only in the worker, in bubblewrap with no network, rlimits, and a timeout; the worker has read-only access to instructor sources and no access to other students' artifacts.</td></tr>
+<tr><td>Secrets</td><td>SAML private key, JWT signing key, and database password from Docker secrets or environment; fail closed in production if any is missing, as pbs_knowledge does for the IdP certificate.</td></tr>
+<tr><td>Retention</td><td>Per-offering retention window; deletion job for artifacts and check events; grades and audit retained per Dartmouth policy.</td></tr>
+<tr><td>Student rights</td><td>A student can view every record about them through the portal; export and deletion requests are handled by the platform admin with an audited script.</td></tr>
+<tr><td>Hosting</td><td>A Dartmouth-managed VM behind Dartmouth DNS, as dartmouthpbs.org is. Nothing about grades in a public GitHub repository.</td></tr>
+<tr><td>Review</td><td>Submit the architecture for Dartmouth's security and privacy review before the first real term. Reuse the pbs_knowledge security audit document as the template.</td></tr>
+</table></div>
+
+<h2 id="client"><span class="num">§14</span>Client library and dartbrains-tools</h2>
+<p>Keep the generic client in its own small package so any course can use it; dartbrains-tools depends on it and supplies defaults. Working names below are placeholders.</p>
+<pre><code># generic client (works in local marimo, MoLab, WASM)
+from grader_client import Grader
+g = Grader(server="https://grader.dartbrains.org")   # reads assignment_version from the notebook's PEP 723 block
+g.signin_button()          # anywidget: "Sign in with Dartmouth" → device handshake in JS
+g.check("glm-q03", [...])  # wraps mograder.check; logs a check event if signed in
+g.submit_button("glm-q03") # anywidget: "Submit" → snapshot + POST from JS, shows result
+g.feedback("glm-q03")      # latest feedback for this question, or a link to the portal
+
+# dartbrains-tools: the same, preconfigured
+from dartbrains_tools import grader
+grader.submit_button("glm-q03")</code></pre>
+<ul>
+  <li>The widget is one anywidget class with a mode (sign-in, submit, feedback) so the JavaScript for the handshake and the fetch lives in one place.</li>
+  <li>The kernel side has no HTTP dependency in v1; all network traffic goes through the widget's JavaScript. A Python-side <code>httpx</code> path can be added for headless use (an instructor's publish CLI already needs one).</li>
+  <li>Pin dartbrains-tools and mograder versions in the assignment's PEP 723 block so MoLab and WASM resolve the same versions the autograder uses.</li>
+</ul>
+
+<h2 id="spikes"><span class="num">§15</span>Spikes to run before building</h2>
+<p>Each of these is a day or less and settles a question that would otherwise be discovered late.</p>
+<ol class="steps">
+  <li><div><b>SAML SP in FastAPI against the Dartmouth IdP</b><span>python3-saml with the pbs_knowledge metadata and quirks. Requires registering the new SP entity with Dartmouth IT, so start it first.</span></div></li>
+  <li><div><b>Device handshake from a MoLab notebook</b><span>anywidget opens the verification tab from a click, polls, receives a token. Confirms CORS, popup behaviour, and that molab.marimo.io lets widget JS reach an external origin.</span></div></li>
+  <li><div><b>Notebook self-source in all three environments</b><span>Read the running notebook's own file in local marimo, MoLab, and WASM. If WASM cannot, the student version can embed a copy of its source hash and the widget can fall back to marimo's export endpoint.</span></div></li>
+  <li><div><b>MoGrader runner as a library in a container</b><span>bubblewrap with no network, a pre-warmed Hugging Face cache, one real DartBrains assignment. Measures grading time per submission.</span></div></li>
+  <li><div><b>Discovery Open OnDemand</b><span>Is there a marimo app in OOD today, and does its proxied origin work with the widget? If not, the Discovery button ships later; the design does not depend on it.</span></div></li>
+  <li><div><b>Canvas and Banner formats</b><span>One real gradebook export from a Dartmouth Canvas course to confirm the SIS Login ID and column header assumptions; one Banner class-list download to see its columns; and a check of whether Dartmouth Canvas lets an instructor generate a personal access token.</span></div></li>
+</ol>
+
+<h2 id="roadmap"><span class="num">§16</span>Roadmap</h2>
+<ol class="steps">
+  <li><div><b>Skeleton (weeks 1 to 2)</b><span>Repo, Docker Compose, PostgreSQL schema and migrations, SAML login for web sessions, users and enrollments, one course and offering seeded. Spikes 1 to 3 in parallel.</span></div></li>
+  <li><div><b>Submission loop (weeks 3 to 4)</b><span>Device handshake, <code>POST /submissions</code>, artifact store, the anywidget with sign-in and submit, publish CLI. A student in MoLab can submit one question and see "received."</span></div></li>
+  <li><div><b>Autograding (weeks 5 to 6)</b><span>Worker, MoGrader runner integration, results back into the widget. Spike 4 becomes production code.</span></div></li>
+  <li><div><b>Instructor and student UIs (weeks 7 to 10)</b><span>Svelte 5 app: sign-in, triage view, roster grid with Canvas CSV import, attempt history, grading queue with a rubric for one question and the worker-rendered notebook, student portal with feedback, SSE for live status.</span></div></li>
+  <li><div><b>Hardening (weeks 11 to 12)</b><span>Audit log, retention job, rate limits, backups and restore test, security review package for Dartmouth. Canvas export.</span></div></li>
+  <li><div><b>Pilot</b><span>One DartBrains assignment with a real class. Then sections, TA role, WASM, Discovery, AI suggestions.</span></div></li>
+</ol>
+<p>The MVP checklist from draft 1 maps onto phases 1 to 4. Multi-tenancy is not deferred: it costs almost nothing to have offering IDs in the schema and the auth dependency from day one, and retrofitting it is the expensive path.</p>
+
+<h2 id="changes"><span class="num">§17</span>Changes from draft 1</h2>
+<div class="tablewrap"><table>
+<tr><th>Draft 1 said</th><th>This draft says</th><th>Why</th></tr>
+<tr><td>Fork MoGrader; extension layer, not a rewrite</td><td>Depend on MoGrader's engine; write a new service around it</td><td>The server, identity, and gradebook layers are the parts that do not fit; the engine is importable and stable.</td></tr>
+<tr><td>Authentication method unspecified beyond "SSO + Duo"</td><td>SAML SP in the browser plus a device-style handshake for notebooks; submit from widget JavaScript</td><td>Matches how Dartmouth actually federates and works identically in WASM, MoLab, and Discovery.</td></tr>
+<tr><td>Per-question submission</td><td>Per-question attempts over whole-notebook snapshots</td><td>MoGrader needs the whole notebook for hidden tests and integrity; grades still live per question.</td></tr>
+<tr><td>SQLite for development, PostgreSQL later</td><td>PostgreSQL from the start</td><td>Immutable attempts, audit, and row-level isolation are easier to get right once, and the schema is new anyway.</td></tr>
+<tr><td>Multi-tenancy after MVP</td><td>Offering-scoped schema and auth from day one; UI for managing many courses later</td><td>Cheap now, expensive later.</td></tr>
+<tr><td>Redis optional</td><td>No Redis; job queue in PostgreSQL</td><td>One fewer stateful service to secure and back up at this scale.</td></tr>
+<tr><td>Admin manages everything</td><td>Platform admin cannot read student work</td><td>Least privilege; simplifies the FERPA story.</td></tr>
+<tr><td>Instructor UI adapted from MoGrader's marimo grader app (draft 2, first cut)</td><td>Svelte 5 single-page app on the same origin; worker renders notebooks to HTML</td><td>Grading is a keyboard-driven, state-heavy workflow; runes handle it better than kernel round-trips, and pbs_knowledge already has the Svelte 5 + SAML pattern.</td></tr>
+<tr><td>Rosters from a Canvas CSV or typed in</td><td>Adapter-based import with preview: Canvas CSV, Canvas personal token, Banner class list, join code, LTI later</td><td>Instructors should never hand-enter a roster; Banner has no realistic API path, so file upload is honest.</td></tr>
+</table></div>
+
+<footer>Sources: audit of pbs_knowledge (backend/src/services/samlAuthService.ts, backend/public/saml-metadata-complete.xml, nginx/conf.d/hybrid.conf) and of mograder 0.3.3 at commit d77da52 (github.com/jameskermode/mograder). Draft 1 is the Initial Specification supplied on 2026-09-10.</footer>
+</div>

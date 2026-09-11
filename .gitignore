@@ -1,0 +1,27 @@
+# secrets and local state
+.env
+data/
+deploy/certs/
+*.pem
+!docs/**/*.pem
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# node
+node_modules/
+frontend/dist/
+.svelte-kit/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+*.swp

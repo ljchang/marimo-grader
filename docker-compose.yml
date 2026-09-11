@@ -1,0 +1,78 @@
+# Production-shaped stack. For local development see README.md (run the API and
+# Vite dev server directly; only postgres is needed from here).
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grader
+      POSTGRES_USER: grader
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-grader}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grader"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: ./backend
+    env_file: .env
+    environment:
+      GRADER_DATABASE_URL: postgresql+psycopg://grader:${POSTGRES_PASSWORD:-grader}@postgres:5432/grader
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GRADER_DATABASE_URL: postgresql+psycopg://grader:${POSTGRES_PASSWORD:-grader}@postgres:5432/grader
+    volumes:
+      - artifacts:/data/artifacts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GRADER_DATABASE_URL: postgresql+psycopg://grader:${POSTGRES_PASSWORD:-grader}@postgres:5432/grader
+      GRADER_USE_BUBBLEWRAP: "true"
+      HF_HOME: /data/hf-cache
+    command: ["grader-worker"]
+    # bubblewrap needs user namespaces; on hardened hosts add: security_opt: [seccomp:unconfined]
+    volumes:
+      - artifacts:/data/artifacts
+      - hfcache:/data/hf-cache
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${TLS_CERT_DIR:-./deploy/certs}:/etc/nginx/certs:ro
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  artifacts:
+  hfcache:
