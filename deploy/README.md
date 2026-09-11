@@ -262,3 +262,33 @@ CSP, which is the point.
   `GRADER_IMAGE_TAG`, `GRADER_STAGING`) and as `env_file` for the backend containers.
 * Ports 80/443 are published by Docker directly, which bypasses ufw; the cloud firewall
   and ufw agree on those ports so this makes no practical difference.
+
+## Publishing before sign-in is enabled
+
+While `GRADER_AUTH_MODE=disabled` (waiting for SAML approval) nobody can sign in, so mint an
+instructor token on the server instead. Run this once per term; the token is valid 8 hours:
+
+```bash
+cd /srv/grader
+docker compose -f docker-compose.prod.yml run --rm web grader seed --course neuroimaging \
+    --title "Introduction to Neuroimaging Analysis" --term 2026-fall --instructor <netid> --students
+docker compose -f docker-compose.prod.yml run --rm web grader token <netid> \
+    --offering neuroimaging/2026-fall --role instructor --admin
+```
+
+Then, from your laptop:
+
+```bash
+cd marimo-grader/backend
+uv run grader publish ../../dartbrains-assignments/assignments/glm.py \
+    --server https://grader.dartbrains.org --offering neuroimaging/2026-fall \
+    --slug glm --title "GLM" --token <token>
+```
+
+## Worker sandbox
+
+`docker-compose.prod.yml` runs the worker with `security_opt: [seccomp:unconfined,
+apparmor:unconfined, systempaths=unconfined]`. Docker's defaults block the unprivileged user
+namespaces and the fresh `/proc` mount that bubblewrap needs; with these three relaxed, student
+code runs inside bubblewrap with `--unshare-net` (verified: no network from inside the sandbox).
+The worker container itself never runs student code outside bubblewrap.

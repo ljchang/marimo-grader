@@ -79,8 +79,7 @@ services:
     # syscall filter for this one container) and re-run deploy.sh. Verify with:
     #   docker compose -f docker-compose.prod.yml exec worker \
     #     bwrap --ro-bind / / --unshare-all --dev /dev true && echo ok
-    # security_opt: ["seccomp:unconfined", "apparmor:unconfined"]
-
+    security_opt: ["seccomp:unconfined", "apparmor:unconfined", "systempaths=unconfined"]
   # Caddy: TLS termination (Let's Encrypt), static frontend, /api proxy.
   proxy:
     image: ghcr.io/ljchang/marimo-grader-web:${GRADER_IMAGE_TAG:-main}

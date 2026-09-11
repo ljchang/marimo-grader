@@ -217,6 +217,52 @@ def cmd_seed(a: argparse.Namespace) -> None:
         print(f"instructor={a.instructor} (also platform admin); students={', '.join(a.students)}")
 
 
+def cmd_token(a: argparse.Namespace) -> None:
+    """Mint a notebook/CLI token for a NetID directly from the server's signing key.
+
+    Operator use only (run inside the web container). Lets an instructor publish
+    while sign-in is disabled, e.g. before SAML approval. The user must exist or
+    is created; an enrollment is added when --offering is given.
+    """
+    from sqlalchemy import select
+
+    from grader.auth.tokens import mint_notebook_token
+    from grader.db import get_sessionmaker
+    from grader.models import Course, Enrollment, Offering, Role, User
+
+    netid = a.netid.strip().lower()
+    with get_sessionmaker()() as db:
+        user = db.scalar(select(User).where(User.netid == netid))
+        if user is None:
+            user = User(netid=netid, display_name=a.display_name)
+            db.add(user)
+            db.flush()
+        if a.admin:
+            user.platform_admin = True
+        if a.offering:
+            course_slug, term = a.offering.split("/", 1)
+            off = db.scalar(
+                select(Offering)
+                .join(Course)
+                .where(Course.slug == course_slug, Offering.term == term)
+            )
+            if off is None:
+                sys.exit(f"offering {a.offering!r} not found; run `grader seed` first")
+            e = db.scalar(
+                select(Enrollment).where(
+                    Enrollment.offering_id == off.id, Enrollment.user_id == user.id
+                )
+            )
+            if e is None:
+                db.add(Enrollment(offering_id=off.id, user_id=user.id, role=Role(a.role)))
+            else:
+                e.role = Role(a.role)
+        db.commit()
+    token, ttl, _ = mint_notebook_token(netid)
+    print(token)
+    print(f"# token for {netid}, valid {ttl // 3600} h", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="grader")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -245,6 +291,15 @@ def main(argv: list[str] | None = None) -> None:
     seed.add_argument("--instructor", default="prof")
     seed.add_argument("--students", nargs="*", default=["f00abc1", "f00xyz9"])
     seed.set_defaults(fn=cmd_seed)
+    tok = sub.add_parser(
+        "token", help="mint a token for a NetID (operator use; works while sign-in is disabled)"
+    )
+    tok.add_argument("netid")
+    tok.add_argument("--offering", help="course/term alias to enroll the user in")
+    tok.add_argument("--role", default="instructor", choices=["student", "ta", "instructor"])
+    tok.add_argument("--admin", action="store_true", help="also make the user a platform admin")
+    tok.add_argument("--display-name")
+    tok.set_defaults(fn=cmd_token)
     a = p.parse_args(argv)
     a.fn(a)
 
