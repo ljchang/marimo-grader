@@ -264,6 +264,8 @@
   {/if}
 </section>
 
+<p class="small muted" id="roster-audit" style="margin-top:1.5rem">Every grade, roster, and settings change is recorded. <a href="/o/{offeringId}/audit">Open the change log</a> if you ever need to trace one.</p>
+
 <style>
   .import .row {
     align-items: flex-end;

@@ -268,6 +268,7 @@ export interface GridCell {
   state: CellState;
   points: number | null;
   max: number;
+  attempts?: number;
 }
 
 export interface GridStudent {
@@ -705,6 +706,9 @@ export const api = {
     },
     audit(offeringId: string, signal?: AbortSignal): Promise<AuditEntry[]> {
       return request<AuditEntry[]>(`/offerings/${enc(offeringId)}/audit`, { signal });
+    },
+    retry(submissionId: string): Promise<{ id: string; status: string }> {
+      return request(`/submissions/${enc(submissionId)}/retry`, { method: 'POST' });
     },
     student(offeringId: string, netid: string, signal?: AbortSignal): Promise<StudentHistory> {
       return request<StudentHistory>(

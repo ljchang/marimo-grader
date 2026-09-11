@@ -34,7 +34,6 @@
       <nav class="ctx" aria-label="Administration">
         <span class="crumb"><span>Platform administration</span></span>
         <a href="/admin" class:active={active('/admin', true)}>Courses &amp; offerings</a>
-        <a href="/admin/audit" class:active={active('/admin/audit')}>Audit log</a>
       </nav>
     {:else if offering}
       <nav class="ctx" aria-label="Offering">
@@ -48,7 +47,6 @@
           {#if instructor}
             <a href="/o/{offering.offering_id}/assignments" class:active={active(`/o/${offering.offering_id}/assignments`)}>Assignments</a>
             <a href="/o/{offering.offering_id}/roster" class:active={active(`/o/${offering.offering_id}/roster`)}>Roster</a>
-            <a href="/o/{offering.offering_id}/audit" class:active={active(`/o/${offering.offering_id}/audit`)}>Audit</a>
           {/if}
         {/if}
         <a href="/me/{offering.offering_id}" class:active={active(`/me/${offering.offering_id}`)}>{staff ? 'Student view' : 'My work'}</a>

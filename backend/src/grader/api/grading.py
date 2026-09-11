@@ -31,11 +31,13 @@ from grader.models import (
     Enrollment,
     EnrollmentStatus,
     GradeAudit,
+    GraderRun,
     GradingMode,
     Question,
     QuestionGrade,
     Role,
     RosterUpload,
+    RunKind,
     RunStatus,
     Score,
     Submission,
@@ -547,3 +549,31 @@ def offering_audit(
         )
     }
     return audit_json(rows, users)
+
+
+@router.post("/submissions/{submission_id}/retry")
+def retry_submission(
+    submission_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)
+):
+    """Re-queue grading (and rendering if missing) for a submission whose run failed."""
+    sub = db.get(Submission, submission_id)
+    if sub is None:
+        raise api_error(404, "not_found", "submission not found")
+    m = membership_for(db, user, sub.enrollment.offering_id)
+    if m is None or not m.is_staff() or not m.can_see_section(sub.enrollment.section_id):
+        raise api_error(404, "not_found", "submission not found")
+    sub.status = SubmissionStatus.received
+    db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
+    if sub.render_artifact_id is None:
+        db.add(GraderRun(submission_id=sub.id, kind=RunKind.render))
+    db.flush()
+    audit.record(
+        db,
+        actor_id=user.id,
+        offering_id=m.offering.id,
+        entity="submission",
+        entity_id=sub.id,
+        action="retry",
+        after={"netid": sub.enrollment.user.netid, "qid": sub.question.qid},
+    )
+    return {"id": str(sub.id), "status": sub.status.value}

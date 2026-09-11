@@ -173,3 +173,30 @@ def test_audit_logs_for_instructor_and_admin(client, seed):
     )
     plat = client.get("/api/v1/admin/audit").json()
     assert plat[0]["entity"] == "course" and all(e["entity"] != "score" for e in plat)
+
+
+def test_retry_requeues_failed_submission(client, seed):
+    from grader.models import GraderRun, RunStatus, Submission
+
+    token = notebook_token(client, "f00abc1")
+    sub = _submit(client, token, seed, "glm-q01")
+    with dbmod.get_sessionmaker()() as db:
+        s = db.get(Submission, __import__("uuid").UUID(sub["id"]))
+        s.status = SubmissionStatus.failed
+        for r in s.runs:
+            r.status = RunStatus.failed
+        db.commit()
+    csrf = login(client, "ta1")
+    r = client.post(f"/api/v1/submissions/{sub['id']}/retry", headers={"X-CSRF-Token": csrf})
+    assert r.status_code == 200 and r.json()["status"] == "received"
+    with dbmod.get_sessionmaker()() as db:
+        queued = db.query(GraderRun).filter(GraderRun.status == RunStatus.queued).count()
+        assert queued >= 1
+    client.cookies.clear()
+    csrf = login(client, "f00abc1")
+    assert (
+        client.post(
+            f"/api/v1/submissions/{sub['id']}/retry", headers={"X-CSRF-Token": csrf}
+        ).status_code
+        == 404
+    )
