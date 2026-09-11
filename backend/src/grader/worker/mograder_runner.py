@@ -92,15 +92,26 @@ def grade(db: Session, sub: Submission) -> GradeResult:
     with tempfile.TemporaryDirectory(prefix="grader-run-") as td:
         nb = Path(td) / "submission.py"
         nb.write_text(fixed)
-        result = run_notebook(
-            nb,
-            timeout=TIMEOUT,
-            sandbox_dir=venv,
-            safety_check=True,
-            isolate_cwd=True,
-            use_bubblewrap=USE_BWRAP,
-            rlimit_as=RLIMIT_AS,
-        )
+        # MoGrader's bubblewrap mode binds only the notebook's directory read-write and
+        # puts a private tmpfs over /tmp, yet it creates its HTML output and the check
+        # sidecar with tempfile (i.e. in /tmp). Those files would be written inside the
+        # sandbox's tmpfs and be invisible afterwards. Pointing tempfile at the run
+        # directory keeps every per-run file inside the bound path. The directory is
+        # unique per run, so isolate_cwd is not needed on top of it.
+        saved_tmp = tempfile.tempdir
+        tempfile.tempdir = td
+        try:
+            result = run_notebook(
+                nb,
+                timeout=TIMEOUT,
+                sandbox_dir=venv,
+                safety_check=True,
+                isolate_cwd=False,
+                use_bubblewrap=USE_BWRAP,
+                rlimit_as=RLIMIT_AS,
+            )
+        finally:
+            tempfile.tempdir = saved_tmp
 
     if not result.export_ok:
         # The notebook could not run at all: a grader failure to look at, not a zero.
