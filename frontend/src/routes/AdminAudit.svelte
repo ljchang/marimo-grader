@@ -1,5 +1,8 @@
 <script lang="ts">
   import Audit from './Audit.svelte';
+
+  // Route components receive params; this page has none to use.
+  let { params: _params = {} }: { params?: Record<string, string> } = $props();
 </script>
 
 <svelte:head><title>Audit log · DartBrains Grader</title></svelte:head>
