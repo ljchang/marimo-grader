@@ -173,7 +173,7 @@
     <button class="primary" type="submit" disabled={busy || !instructorOffering}>Add instructor</button>
   </form>
 </div>
-<section class="block">
+<section class="block" id="audit">
   <div class="block-head"><h2>Platform audit log</h2><span class="muted small">Courses, offerings, staff, publishes, roster imports, exports. Grade changes are only visible to each offering's instructors.</span></div>
   <Audit scope="platform" />
 </section>

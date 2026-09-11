@@ -1,12 +1,25 @@
 <script lang="ts">
   import { auth } from '$lib/auth.svelte';
   import { router } from '$lib/router.svelte';
+  import { uiMode } from '$lib/mode.svelte';
   import type { Enrollment } from '$lib/api';
 
   let { offering = null }: { offering?: Enrollment | null } = $props();
 
   const staff = $derived(offering ? auth.isStaff(offering.offering_id) : false);
   const instructor = $derived(offering ? auth.isInstructor(offering.offering_id) : false);
+
+  // Accounts that are both admin and teaching staff get an explicit mode switch so the
+  // two jobs never share one navigation. Everyone else sees a single mode.
+  const dual = $derived(auth.isAdmin && (auth.me?.enrollments.length ?? 0) > 0);
+  const mode = $derived(auth.isAdmin && !dual ? 'admin' : dual ? uiMode.value : 'teaching');
+  $effect(() => {
+    uiMode.followPath(router.path);
+  });
+  function switchMode(next: 'teaching' | 'admin') {
+    uiMode.set(next);
+    router.navigate(next === 'admin' ? '/admin' : '/');
+  }
 
   function active(prefix: string, exact = false): boolean {
     return exact ? router.path === prefix : router.path === prefix || router.path.startsWith(prefix + '/');
@@ -17,7 +30,13 @@
   <div class="inner">
     <a class="wordmark" href="/">DartBrains <span>Grader</span></a>
 
-    {#if offering}
+    {#if mode === 'admin'}
+      <nav class="ctx" aria-label="Administration">
+        <span class="crumb"><span>Platform administration</span></span>
+        <a href="/admin" class:active={active('/admin')}>Courses &amp; offerings</a>
+        <a href="/admin#audit" class:active={false}>Audit log</a>
+      </nav>
+    {:else if offering}
       <nav class="ctx" aria-label="Offering">
         <span class="crumb">
           <span class="mono">{offering.course_slug}</span>
@@ -37,8 +56,11 @@
     {/if}
 
     <div class="user">
-      {#if auth.isAdmin}
-        <a href="/admin" class:active={active('/admin')}>Admin</a>
+      {#if dual}
+        <div class="mode" role="group" aria-label="Mode">
+          <button class="seg" class:on={mode === 'teaching'} onclick={() => switchMode('teaching')}>Teaching</button>
+          <button class="seg" class:on={mode === 'admin'} onclick={() => switchMode('admin')}>Admin</button>
+        </div>
       {/if}
       {#if auth.signedIn && auth.me}
         <span class="netid" title={auth.me.display_name}>{auth.me.netid}</span>
@@ -51,6 +73,10 @@
 </header>
 
 <style>
+  .mode { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .seg { font: inherit; font-size: 0.85rem; padding: 0.25rem 0.7rem; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+  .seg.on { background: var(--accent); color: var(--accent-ink, #fff); }
+  .seg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .topbar {
     height: var(--topbar-h);
     border-bottom: 1px solid var(--rule);
@@ -96,20 +122,17 @@
     margin: 0 4px;
     opacity: 0.6;
   }
-  .ctx a,
-  .user a {
+  .ctx a {
     color: var(--ink);
     padding: 4px 0;
     border-bottom: 2px solid transparent;
     white-space: nowrap;
   }
-  .ctx a:hover,
-  .user a:hover {
+  .ctx a:hover {
     text-decoration: none;
     border-color: var(--rule);
   }
-  .ctx a.active,
-  .user a.active {
+  .ctx a.active {
     border-color: var(--accent);
   }
   .user {

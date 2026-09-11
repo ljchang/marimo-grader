@@ -30,9 +30,6 @@
     <p class="eyebrow">Offerings</p>
     <h1>{auth.me?.display_name ?? auth.me?.netid}</h1>
   </div>
-  {#if auth.isAdmin}
-    <a class="btn" href="/admin">Platform admin</a>
-  {/if}
 </div>
 
 {#if error}
