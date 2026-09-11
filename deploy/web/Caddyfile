@@ -29,7 +29,9 @@
 	# API: proxied to uvicorn. flush_interval -1 disables response buffering so
 	# server-sent events stream through; the body limit matches the backend's
 	# notebook/output limits with headroom.
-	handle /api/* {
+	# API plus the short public alias routes (/a/{course}/{term}/...)
+	@backend path /api/* /a/*
+	handle @backend {
 		request_body {
 			max_size 16MB
 		}
