@@ -15,6 +15,7 @@
   import Audit from './routes/Audit.svelte';
   import StudentPortal from './routes/StudentPortal.svelte';
   import Admin from './routes/Admin.svelte';
+  import AdminAudit from './routes/AdminAudit.svelte';
   import SignIn from './routes/SignIn.svelte';
   import NotFound from './routes/NotFound.svelte';
 
@@ -31,6 +32,7 @@
   const routes: RouteDef[] = [
     { pattern: '/', component: Offerings, access: 'signed_in' },
     { pattern: '/admin', component: Admin, access: 'admin' },
+    { pattern: '/admin/audit', component: AdminAudit, access: 'admin' },
     { pattern: '/o/:offering', component: Triage, access: 'staff' },
     { pattern: '/o/:offering/grade/:questionId', component: GradeQueue, access: 'staff', full: true },
     { pattern: '/o/:offering/students/:netid', component: StudentHistory, access: 'staff' },

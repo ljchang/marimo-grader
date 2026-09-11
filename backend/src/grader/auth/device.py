@@ -96,7 +96,7 @@ def poll(db: Session, device_code: str) -> dict:
     }
 
 
-LOGIN_LINK_TTL = 600
+LOGIN_LINK_TTL = 1800
 
 
 def mint_login_code(db: Session, user: User) -> str:
