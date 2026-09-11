@@ -285,6 +285,16 @@ uv run grader publish ../../dartbrains-assignments/assignments/glm.py \
     --slug glm --title "GLM" --token <token>
 ```
 
+## Signing in to the web UI before SSO is enabled
+
+`grader login-link <netid>` prints a one-time URL (valid 10 minutes) that signs that NetID into
+the browser UI. It works in every auth mode and can only be minted with shell access, so it is
+also the break-glass path if SSO is ever unavailable:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm web grader login-link f00275v
+```
+
 ## Worker sandbox
 
 `docker-compose.prod.yml` runs the worker with `security_opt: [seccomp:unconfined,

@@ -150,6 +150,32 @@ def csrf(p: Principal = Depends(current_principal)):
     return {"csrf_token": p.session_csrf}
 
 
+# --- operator login link ---------------------------------------------------
+
+
+@router.get("/exchange")
+def exchange_login_code(code: str, next: str | None = None, db: Session = Depends(get_db)):
+    """Sign in with a one-time code minted by ``grader login-link`` on the server.
+
+    Works in every auth mode, including ``disabled``: the code can only be created by
+    an operator with shell access, so this is the break-glass path when SSO is not yet
+    (or no longer) available. Codes are single-use and expire in minutes.
+    """
+    user = device.consume_login_code(db, code)
+    if user is None:
+        return HTMLResponse(
+            _VERIFY_PAGE.format(
+                body="<h1 class='err'>That sign-in link is not valid</h1>"
+                "<p>It may have expired or already been used. Ask the operator for a new one.</p>"
+            ),
+            status_code=400,
+        )
+    sess = create_session(db, user)
+    resp = RedirectResponse(_frontend(_safe_next(next)), status_code=303)
+    set_session_cookie(resp, sess)
+    return resp
+
+
 # --- device handshake -------------------------------------------------------
 
 

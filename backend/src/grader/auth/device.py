@@ -76,8 +76,8 @@ def approve(db: Session, user_code: str, user: User) -> DeviceCode | None:
 
 def poll(db: Session, device_code: str) -> dict:
     row = db.scalar(select(DeviceCode).where(DeviceCode.device_code_hash == _hash(device_code)))
-    if row is None or row.consumed_at is not None:
-        return {"status": "expired"}
+    if row is None or row.consumed_at is not None or row.client == "operator-login-link":
+        return {"status": "expired"}  # login-link codes are for /auth/exchange only
     if _aware(row.expires_at) < datetime.now(UTC):
         return {"status": "expired"}
     if row.approved_at is None or row.user_id is None:
@@ -94,3 +94,39 @@ def poll(db: Session, device_code: str) -> dict:
         "expires_in": ttl,
         "netid": user.netid,
     }
+
+
+LOGIN_LINK_TTL = 600
+
+
+def mint_login_code(db: Session, user: User) -> str:
+    """Operator-only: a pre-approved, single-use code that ``/auth/exchange`` turns into a session."""
+    code = secrets.token_urlsafe(32)
+    db.add(
+        DeviceCode(
+            device_code_hash=_hash(code),
+            user_code="LOGIN-" + secrets.token_hex(4).upper(),
+            client="operator-login-link",
+            user_id=user.id,
+            approved_at=utcnow(),
+            expires_at=datetime.now(UTC) + timedelta(seconds=LOGIN_LINK_TTL),
+        )
+    )
+    db.flush()
+    return code
+
+
+def consume_login_code(db: Session, code: str) -> User | None:
+    row = db.scalar(select(DeviceCode).where(DeviceCode.device_code_hash == _hash(code)))
+    if (
+        row is None
+        or row.client != "operator-login-link"
+        or row.consumed_at is not None
+        or row.user_id is None
+        or _aware(row.expires_at) < datetime.now(UTC)
+    ):
+        return None
+    row.consumed_at = utcnow()
+    user = db.get(User, row.user_id)
+    db.flush()
+    return user

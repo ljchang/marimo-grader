@@ -263,6 +263,27 @@ def cmd_token(a: argparse.Namespace) -> None:
     print(f"# token for {netid}, valid {ttl // 3600} h", file=sys.stderr)
 
 
+def cmd_login_link(a: argparse.Namespace) -> None:
+    """Print a one-time browser sign-in URL for a NetID (operator use, any auth mode)."""
+    from sqlalchemy import select
+
+    from grader.auth.device import LOGIN_LINK_TTL, mint_login_code
+    from grader.config import get_settings
+    from grader.db import get_sessionmaker
+    from grader.models import User
+
+    netid = a.netid.strip().lower()
+    with get_sessionmaker()() as db:
+        user = db.scalar(select(User).where(User.netid == netid))
+        if user is None:
+            sys.exit(f"no user {netid!r}; run `grader token {netid} --offering ...` first")
+        code = mint_login_code(db, user)
+        db.commit()
+    base = get_settings().base_url
+    print(f"{base}/api/v1/auth/exchange?code={code}")
+    print(f"# one-time sign-in link for {netid}, valid {LOGIN_LINK_TTL // 60} min", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="grader")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -300,6 +321,11 @@ def main(argv: list[str] | None = None) -> None:
     tok.add_argument("--admin", action="store_true", help="also make the user a platform admin")
     tok.add_argument("--display-name")
     tok.set_defaults(fn=cmd_token)
+    ll = sub.add_parser(
+        "login-link", help="print a one-time browser sign-in link for a NetID (operator use)"
+    )
+    ll.add_argument("netid")
+    ll.set_defaults(fn=cmd_login_link)
     a = p.parse_args(argv)
     a.fn(a)
 
