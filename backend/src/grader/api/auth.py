@@ -57,6 +57,8 @@ def _upsert_user(db: Session, netid: str, display_name: str | None) -> User:
 async def login(request: Request, next: str | None = None):
     s = get_settings()
     target = _safe_next(next)
+    if s.auth_mode == "disabled":
+        return HTMLResponse(_VERIFY_PAGE.format(body=_DISABLED_BODY), status_code=503)
     if s.auth_mode == "dev":
         return RedirectResponse(f"{s.base_url}/api/v1/auth/dev-login?{urlencode({'next': target})}")
     url = await saml.login_url(request, relay_state=target)
@@ -168,6 +170,13 @@ def device_start(body: DeviceStart, db: Session = Depends(get_db)):
 def device_token(body: DevicePoll, db: Session = Depends(get_db)):
     return device.poll(db, body.device_code)
 
+
+_DISABLED_BODY = (
+    "<h1>Sign-in is not available yet</h1>"
+    "<p>Dartmouth single sign-on for this grader is still being set up. "
+    "You can keep working in the notebook: <b>Check</b> runs locally. "
+    "Submitting will open once sign-in is enabled.</p>"
+)
 
 _VERIFY_PAGE = """<!doctype html><meta charset="utf-8"><title>Grader sign-in</title>
 <style>body{{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#171C19}}

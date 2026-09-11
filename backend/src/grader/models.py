@@ -249,6 +249,9 @@ class Submission(Base):
     __tablename__ = "submissions"
     __table_args__ = (
         UniqueConstraint("enrollment_id", "question_id", "attempt_no", name="uq_attempt"),
+        UniqueConstraint(
+            "enrollment_id", "question_id", "client_submission_id", name="uq_client_submission"
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_id)
     enrollment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("enrollments.id"), index=True)
@@ -263,6 +266,8 @@ class Submission(Base):
     render_artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifacts.id"))
     client_check_results: Mapped[list] = mapped_column(JSON, default=list)
     client_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Idempotency key chosen by the widget per click; a retry returns the same attempt.
+    client_submission_id: Mapped[str | None] = mapped_column(String(64))
     # status is the one mutable column, advanced only by the worker.
     status: Mapped[SubmissionStatus] = mapped_column(
         _enum(SubmissionStatus), default=SubmissionStatus.received

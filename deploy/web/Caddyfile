@@ -1,0 +1,49 @@
+# Same-origin deployment: static Svelte app at /, API at /api (backend
+# container "web", port 8000). Replaces the earlier nginx config.
+#
+# Runtime environment:
+#   GRADER_HOST     hostname to serve and obtain a certificate for
+#                   (default grader.dartbrains.org; "localhost" gives a
+#                   locally-trusted dev certificate)
+#   GRADER_STAGING  "1" adds X-Robots-Tag: noindex so staging stays out of search
+#
+# Caddy redirects http:// to https:// and manages certificates automatically.
+
+{$GRADER_HOST:grader.dartbrains.org} {
+	# Security headers on every response. The CSP allows the SAML form POST
+	# back from the Dartmouth IdP (login/logout.dartmouth.edu); everything else
+	# is same-origin. Keep in sync with the design document (§13).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; form-action 'self' https://login.dartmouth.edu https://logout.dartmouth.edu; frame-ancestors 'none'; base-uri 'self'"
+		-Server
+	}
+
+	# Staging: keep search engines away.
+	@staging expression `{env.GRADER_STAGING} == "1"`
+	header @staging X-Robots-Tag "noindex, nofollow"
+
+	# API: proxied to uvicorn. flush_interval -1 disables response buffering so
+	# server-sent events stream through; the body limit matches the backend's
+	# notebook/output limits with headroom.
+	handle /api/* {
+		request_body {
+			max_size 16MB
+		}
+		reverse_proxy web:8000 {
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# Everything else is the single-page app.
+	handle {
+		root * /srv
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

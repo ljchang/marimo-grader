@@ -41,13 +41,21 @@ Errors: `{"error": {"code": "not_enrolled", "message": "..."}}` with 401 (unauth
 - `POST /offerings/{offering_id}/assignments/{assignment_id}/versions` multipart: `instructor_notebook` (file), `student_notebook` (file), `questions` (JSON string: `[{"qid","title","max_points","grading_mode","check_keys":[...]}]`), `cell_hashes` (JSON string) → `{"version": 3, "student_url": "/api/v1/assignment-versions/{id}/student.py"}`
 - `GET /assignment-versions/{version_id}/student.py` → student notebook source (public if the offering allows, else enrolled).
 
+## Public alias routes (no prefix, no auth; gated by `offering.settings.public_student_notebooks`, default on)
+
+- `GET /a/{course}/{term}/assignments.json` → `{"course","term","offering_id","title","assignments":[{"slug","title","assignment_id","version","version_id","published_at","due_at","points","environments","questions":[...],"student_url","molab_url"}]}`. What `marimo-book sync-assignments` reads.
+- `GET /a/{course}/{term}/{slug}/student.py[?v=N]` → the distributed student notebook, exact bytes the server finalized at publish (headers `X-Grader-Version`, `X-Grader-Version-Id`).
+- `GET /a/{course}/{term}/{slug}/molab[?v=N]` → 302 to `https://molab.marimo.io/new/#code/<lzstring>`.
+
+Publishing (`POST .../versions`) is finalized server-side: the server injects `grader-server`, `grader-course`, `grader-term`, `grader-offering-id`, `grader-assignment`, `grader-assignment-id`, `grader-assignment-version`, `grader-version` into the student notebook's PEP 723 block and stores those bytes. It refuses (`422 solution_leak`) if solution or hidden-test markers remain, and returns `200 {"unchanged": true}` when the instructor notebook and question list are identical to the latest version.
+
 ## Submissions
 
-- `POST /submissions` (Bearer) body:
+- `POST /submissions` (Bearer) body (optional `client_submission_id`: an id per click; a retry with the same id returns the same attempt with `"duplicate": true`):
   ```json
   {"assignment_version_id": "uuid", "question_id": "glm-q03", "notebook": "<source>", "check_results": [], "outputs": {}, "client": {"package": "dartbrains-tools", "version": "0.2.0", "env": "molab"}}
   ```
-  → 201 `{"id", "attempt_no", "submitted_at", "status": "received"}`. 403 `not_enrolled` if the NetID has no active student enrollment in the version's offering; 409 `attempts_exhausted`.
+  → 201 `{"id", "attempt_no", "submitted_at", "status": "received", "version": 2, "latest_version": 3, "stale": true, "duplicate": false}`. Questions resolve against the submitted version's snapshot, so an older copy keeps working after a republish; `stale` tells the widget to suggest the latest copy. 403 `not_enrolled` if the NetID has no active student enrollment in the version's offering; 409 `attempts_exhausted`.
 - `GET /submissions/{id}` (owner, or TA/instructor of the offering) → submission incl. `status`, `score` (if any), `feedback`, `render_url`.
 - `GET /offerings/{offering_id}/me/submissions?assignment_id=` (student) → own attempts.
 - `POST /check-events` (Bearer) `{"assignment_version_id", "question_id", "check_key", "passed": true}` → 202. Best effort; ignored if `log_checks` is off.

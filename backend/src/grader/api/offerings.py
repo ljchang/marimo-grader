@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +22,7 @@ from grader.auth.deps import (
     require_instructor,
     require_member,
 )
+from grader.config import get_settings
 from grader.db import get_db
 from grader.models import (
     Assignment,
@@ -30,10 +34,12 @@ from grader.models import (
     Question,
     Role,
     User,
+    new_id,
 )
 from grader.services import audit
 from grader.services.artifacts import store
 from grader.services.grades import POLICIES
+from grader.services.notebook_meta import inject_grader_keys, leaked_markers
 
 router = APIRouter(tags=["offerings"])
 
@@ -215,22 +221,54 @@ async def publish_version(
     m: Membership = Depends(require_instructor),
     db: Session = Depends(get_db),
 ):
+    """Publish a new immutable version.
+
+    The server finalizes the student notebook: it injects the ``grader-*`` keys (server,
+    course/term, slug, ids, version) into the PEP 723 block and stores exactly those bytes.
+    Publishing the same instructor notebook and question list twice is a no-op (200,
+    ``unchanged: true``) so CI can re-run safely.
+    """
     a = db.get(Assignment, assignment_id)
     if a is None or a.offering_id != m.offering.id:
         raise api_error(404, "not_found", "assignment not found")
     try:
         qs = [QuestionIn.model_validate(q) for q in json.loads(questions)]
-        hashes = json.loads(cell_hashes)
+        client_hashes = json.loads(cell_hashes)
     except (ValueError, TypeError) as e:
         raise api_error(422, "bad_json", f"questions/cell_hashes must be JSON: {e}") from e
     if not qs:
         raise api_error(422, "no_questions", "at least one question is required")
 
+    inst_bytes = await instructor_notebook.read()
+    student_text = (await student_notebook.read()).decode("utf-8", "replace")
+    leaked = leaked_markers(student_text)
+    if leaked:
+        raise api_error(
+            422, "solution_leak", f"student notebook still contains {', '.join(leaked)}"
+        )
+
+    course, term = a.offering.course.slug, a.offering.term
+    question_payload = [q.model_dump(mode="json") for q in qs]
+    fingerprint = hashlib.sha256(
+        inst_bytes + json.dumps(question_payload, sort_keys=True).encode()
+    ).hexdigest()
+    if a.versions:
+        latest = a.versions[-1]
+        if (latest.cell_hashes or {}).get("publish_fingerprint") == fingerprint:
+            return JSONResponse(
+                {
+                    "id": str(latest.id),
+                    "version": latest.version,
+                    "unchanged": True,
+                    "student_url": f"{get_settings().base_url}/a/{course}/{term}/{a.slug}/student.py",
+                    "download_url": f"{get_settings().base_url}/a/{course}/{term}/{a.slug}/student.py?v={latest.version}",
+                    "assignment": assignment_json(a),
+                },
+                status_code=200,
+            )
+
     st = store()
-    inst = st.put(
-        db, await instructor_notebook.read(), kind="notebook", content_type="text/x-python"
-    )
-    stud = st.put(db, await student_notebook.read(), kind="notebook", content_type="text/x-python")
+    inst = st.put(db, inst_bytes, kind="notebook", content_type="text/x-python")
 
     # Upsert questions by stable qid; deactivate ones no longer present.
     existing = {q.qid: q for q in a.questions}
@@ -256,14 +294,35 @@ async def publish_version(
             q.active = False
     db.flush()
 
-    version = (a.versions[-1].version + 1) if a.versions else 1
+    version_no = (a.versions[-1].version + 1) if a.versions else 1
+    version_id = new_id()
+    final_text = inject_grader_keys(
+        student_text,
+        server=get_settings().base_url,
+        course=course,
+        term=term,
+        offering_id=str(a.offering_id),
+        assignment=a.slug,
+        assignment_id=str(a.id),
+        assignment_version=str(version_id),
+        version=str(version_no),
+    )
+    final_bytes = final_text.encode()
+    stud = st.put(db, final_bytes, kind="notebook", content_type="text/x-python")
+    mograder_hashes = re.search(r'^# mograder-cell-hashes = "([^"]*)"', final_text, re.M)
     v = AssignmentVersion(
+        id=version_id,
         assignment_id=a.id,
-        version=version,
+        version=version_no,
         instructor_artifact_id=inst.id,
         student_artifact_id=stud.id,
-        cell_hashes=hashes,
-        question_snapshot=[q.model_dump(mode="json") for q in qs],
+        cell_hashes={
+            "publish_fingerprint": fingerprint,
+            "student_sha256": hashlib.sha256(final_bytes).hexdigest(),
+            "mograder_cells": mograder_hashes.group(1).split(",") if mograder_hashes else [],
+            **({"client": client_hashes} if client_hashes else {}),
+        },
+        question_snapshot=question_payload,
         published_by=m.user.id,
     )
     db.add(v)
@@ -276,12 +335,16 @@ async def publish_version(
         entity="assignment_version",
         entity_id=v.id,
         action="publish",
-        after={"version": version, "questions": [q.qid for q in qs]},
+        after={"version": version_no, "questions": [q.qid for q in qs]},
     )
+    base = f"{get_settings().base_url}/a/{course}/{term}/{a.slug}"
     return {
         "id": str(v.id),
-        "version": version,
-        "student_url": f"/api/v1/assignment-versions/{v.id}/student.py",
+        "version": version_no,
+        "unchanged": False,
+        "student_url": f"{base}/student.py",
+        "download_url": f"{base}/student.py?v={version_no}",
+        "molab_url": f"{base}/molab",
         "assignment": assignment_json(a),
     }
 

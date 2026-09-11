@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from grader.api import admin, auth, grading, offerings, roster, submissions
+from grader.api import admin, auth, grading, offerings, public, roster, submissions
 from grader.config import get_settings
 
 API_PREFIX = "/api/v1"
@@ -57,7 +57,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "env": s.env, "auth_mode": s.auth_mode}
+        cur = get_settings()  # read at request time so mode flips are visible without restart
+        return {
+            "ok": True,
+            "env": cur.env,
+            "auth_mode": cur.auth_mode,
+            "submissions_enabled": cur.auth_mode != "disabled",
+        }
 
     for r in (
         auth.router,
@@ -68,6 +74,7 @@ def create_app() -> FastAPI:
         admin.router,
     ):
         app.include_router(r, prefix=API_PREFIX)
+    app.include_router(public.router)  # /a/... aliases live at the root
     return app
 
 

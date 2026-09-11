@@ -1,0 +1,36 @@
+# Publishes grader-client to PyPI on a tag like client-v0.1.0.
+# Uses PyPI trusted publishing: on pypi.org, add a "pending publisher" for project
+# grader-client with owner ljchang, repo marimo-grader, workflow release-client.yml,
+# environment pypi. No API token is stored in GitHub.
+name: release-client
+on:
+  push:
+    tags: ["client-v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: client } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Check the tag matches pyproject version
+        run: |
+          tag="${GITHUB_REF_NAME#client-v}"
+          ver="$(uv version --short)"
+          test "$tag" = "$ver" || { echo "tag $tag != pyproject $ver"; exit 1; }
+      - run: uv sync --all-extras && uv run pytest -q
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with: { name: client-dist, path: client/dist/ }
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: client-dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1

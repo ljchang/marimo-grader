@@ -17,7 +17,6 @@ it in the instructor notebook and ``manual`` otherwise. Override with
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import sys
@@ -69,15 +68,6 @@ def _generate_student(source: Path) -> str:
     return text
 
 
-def _inject_metadata(student_text: str, **kv: str) -> str:
-    """Add ``# grader-<key> = "<value>"`` lines inside the PEP 723 block (create one if absent)."""
-    lines = [f'# grader-{k.replace("_", "-")} = "{v}"' for k, v in kv.items() if v]
-    if "# /// script" in student_text:
-        return student_text.replace("# ///\n", "\n".join(lines) + "\n# ///\n", 1)
-    block = "# /// script\n" + "\n".join(lines) + "\n# ///\n"
-    return block + student_text
-
-
 def _questions(source_text: str, manual: set[str], hybrid: dict[str, float]) -> list[dict]:
     m = MARKS_RE.search(source_text)
     if not m:
@@ -107,62 +97,78 @@ def _questions(source_text: str, manual: set[str], hybrid: dict[str, float]) -> 
     return qs
 
 
+def _resolve_offering(
+    client: httpx.Client, server: str, offering: str, h: dict
+) -> tuple[str, str, str]:
+    """Accept an offering uuid or a ``course/term`` alias; return (offering_id, course, term)."""
+    if "/" in offering:
+        course, term = offering.split("/", 1)
+        r = client.get(f"{server}/a/{course}/{term}/assignments.json")
+        if r.status_code != 200:
+            sys.exit(f"offering {offering!r} not found on {server} ({r.status_code})")
+        return r.json()["offering_id"], course, term
+    r = client.get(f"{server}/api/v1/offerings/{offering}", headers=h)
+    if r.status_code != 200:
+        sys.exit(f"offering {offering!r} not found or not a member ({r.status_code})")
+    j = r.json()
+    return offering, j["course_slug"], j["term"]
+
+
 def cmd_publish(a: argparse.Namespace) -> None:
+    from grader.services.notebook_meta import leaked_markers
+
     server = a.server.rstrip("/")
     source = Path(a.notebook)
     source_text = source.read_text()
     student_text = Path(a.student).read_text() if a.student else _generate_student(source)
+    leaked = leaked_markers(student_text)
+    if leaked:
+        sys.exit(f"refusing to publish: student notebook still contains {', '.join(leaked)}")
     hybrid = dict((kv.split("=")[0], float(kv.split("=")[1])) for kv in a.hybrid)
     questions = _questions(source_text, set(a.manual), hybrid)
 
     with httpx.Client(timeout=60) as client:
         token = a.token or _device_login(client, server)
         h = {"Authorization": f"Bearer {token}"}
-        # Find or create the assignment.
-        r = client.get(f"{server}/api/v1/offerings/{a.offering}/assignments", headers=h)
+        offering_id, course, term = _resolve_offering(client, server, a.offering, h)
+        r = client.get(f"{server}/api/v1/offerings/{offering_id}/assignments", headers=h)
         r.raise_for_status()
         existing = next((x for x in r.json() if x["slug"] == a.slug), None)
         if existing is None:
             r = client.post(
-                f"{server}/api/v1/offerings/{a.offering}/assignments",
+                f"{server}/api/v1/offerings/{offering_id}/assignments",
                 headers=h,
                 json={"slug": a.slug, "title": a.title or a.slug},
             )
             r.raise_for_status()
             existing = r.json()
         assignment_id = existing["id"]
-        # The version id is not known until publish; embed the ids we do know, then
-        # re-publish the student text with the version id (two-step so the file is self-describing).
-        pre = _inject_metadata(
-            student_text, server=server, offering_id=a.offering, assignment_id=assignment_id
-        )
-        cell_hashes = {"sha256": hashlib.sha256(pre.encode()).hexdigest()}
+        # The server finalizes the student notebook (injects ids + version) and stores
+        # exactly the bytes it will serve; we download those rather than writing our own.
         r = client.post(
-            f"{server}/api/v1/offerings/{a.offering}/assignments/{assignment_id}/versions",
+            f"{server}/api/v1/offerings/{offering_id}/assignments/{assignment_id}/versions",
             headers=h,
             files={
                 "instructor_notebook": (source.name, source_text.encode(), "text/x-python"),
-                "student_notebook": (source.name, pre.encode(), "text/x-python"),
+                "student_notebook": (source.name, student_text.encode(), "text/x-python"),
             },
-            data={"questions": json.dumps(questions), "cell_hashes": json.dumps(cell_hashes)},
+            data={"questions": json.dumps(questions), "cell_hashes": "{}"},
         )
         if r.status_code >= 400:
             sys.exit(f"publish failed: {r.status_code} {r.text}")
         v = r.json()
-        final = _inject_metadata(
-            student_text,
-            server=server,
-            offering_id=a.offering,
-            assignment_id=assignment_id,
-            assignment_version=v["id"],
-        )
+        if v.get("unchanged"):
+            print(f"{a.slug} v{v['version']} unchanged (same instructor notebook and questions)")
+        else:
+            print(f"Published {a.slug} v{v['version']} ({len(questions)} questions)")
+        dl = client.get(v["download_url"], headers=h)
+        dl.raise_for_status()
         out = Path(a.out or f"{source.stem}_student.py")
-        out.write_text(final)
-        print(f"Published {a.slug} v{v['version']} ({len(questions)} questions)")
+        out.write_bytes(dl.content)
+        print(f"Student notebook written to {out}")
         print(
-            f"Student notebook written to {out} — distribute this file (it embeds the version id)."
+            f"Served at {v['student_url']}  (MoLab: {v.get('molab_url', v['student_url'].replace('/student.py', '/molab'))})"
         )
-        print(f"Also served at {server}{v['student_url']}")
 
 
 def cmd_seed(a: argparse.Namespace) -> None:
@@ -217,7 +223,11 @@ def main(argv: list[str] | None = None) -> None:
     pub = sub.add_parser("publish", help="publish an assignment version")
     pub.add_argument("notebook")
     pub.add_argument("--server", required=True)
-    pub.add_argument("--offering", required=True, help="offering id")
+    pub.add_argument(
+        "--offering",
+        required=True,
+        help="offering id or course/term alias, e.g. neuroimaging/2026-fall",
+    )
     pub.add_argument("--slug", required=True)
     pub.add_argument("--title")
     pub.add_argument("--student", help="pre-generated student notebook (skip mograder generation)")

@@ -12,7 +12,7 @@ The design document is in [`docs/design.html`](docs/design.html); the API contra
 backend/   FastAPI service + worker  (Python, PostgreSQL, SQLAlchemy 2, Alembic, python3-saml)
 frontend/  Instructor, TA and student UI  (Svelte 5 runes, TypeScript, Vite)
 client/    grader-client: the anywidget students see in the notebook  (Python, anywidget)
-deploy/    nginx config for the same-origin production deployment
+deploy/    Caddy image, droplet bootstrap/deploy scripts, DigitalOcean runbook
 docs/      design document and API contract
 ```
 
@@ -92,16 +92,29 @@ g.submit_button("glm-q01")
 
 ## Production
 
-`docker compose up -d --build` starts PostgreSQL, migrations, the API, the worker, a static
-frontend build, and nginx. Before that:
+Production runs on one DigitalOcean droplet (Docker Compose: API, worker, Caddy) plus
+DigitalOcean Managed PostgreSQL. Images are built by GitHub Actions and pulled from GHCR;
+nothing is built on the server. The step-by-step runbook, including secret generation, SAML
+registration, backups, and staging vs. production settings, is in
+[`deploy/README.md`](deploy/README.md).
 
-1. Set every secret in `.env` (`GRADER_ENV=prod` refuses to start otherwise): session secret,
-   Ed25519 JWT key, SAML SP certificate and key, IdP certificate.
-2. Register the SP with Dartmouth IT. The metadata is served at `/api/v1/auth/saml/metadata`.
-   The IdP metadata, a working SP metadata template, and the registration email template are in
-   the pbs_knowledge repository.
-3. Put TLS certificates in `deploy/certs/` (or set `TLS_CERT_DIR`).
-4. Submit the deployment for Dartmouth's security and privacy review (see design §13).
+### Deploying to DigitalOcean
+
+```bash
+# once, on a fresh Ubuntu 24.04 droplet
+ssh root@<droplet-ip> 'bash -s' < deploy/bootstrap.sh
+
+# each release, as the deploy user in /srv/grader (holds docker-compose.prod.yml + .env)
+./deploy.sh            # or ./deploy.sh sha-<short> / ./deploy.sh v0.2.0
+curl -fsS https://grader.dartbrains.org/api/health
+```
+
+Before the first deploy: set every secret in `.env` (`GRADER_ENV=prod` refuses to start
+otherwise), register the SP with Dartmouth IT (metadata at `/api/v1/auth/saml/metadata`), and
+submit the deployment for Dartmouth's security and privacy review (design §13).
+
+`docker compose up -d --build` still brings up the same shape locally (with a local PostgreSQL)
+for testing the containers before pushing.
 
 ## Status
 

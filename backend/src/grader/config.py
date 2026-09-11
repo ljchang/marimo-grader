@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     device_poll_interval_seconds: int = 3
 
     # Auth mode: "saml" uses Dartmouth; "dev" enables /auth/dev-login.
-    auth_mode: Literal["saml", "dev"] = "dev"
+    auth_mode: Literal["saml", "dev", "disabled"] = "dev"
     saml_sp_entity_id: str | None = None
     saml_idp_entity_id: str = "urn:mace:incommon:dartmouth.edu"
     saml_idp_sso_url: str = "https://login.dartmouth.edu/cas/idp/profile/SAML2/POST/SSO"
@@ -68,10 +68,10 @@ class Settings(BaseSettings):
                 missing.append("GRADER_SESSION_SECRET")
             if not self.jwt_private_key_pem:
                 missing.append("GRADER_JWT_PRIVATE_KEY_PEM")
-            if self.auth_mode != "saml":
-                missing.append("GRADER_AUTH_MODE=saml")
+            if self.auth_mode == "dev":
+                missing.append("GRADER_AUTH_MODE=saml (or disabled)")
             for name in ("saml_sp_entity_id", "saml_idp_cert", "saml_sp_cert", "saml_sp_key"):
-                if not getattr(self, name):
+                if self.auth_mode == "saml" and not getattr(self, name):
                     missing.append("GRADER_" + name.upper())
             if not self.cookie_secure:
                 missing.append("GRADER_COOKIE_SECURE=true")

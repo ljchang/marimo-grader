@@ -1,5 +1,7 @@
-# Production-shaped stack. For local development see README.md (run the API and
-# Vite dev server directly; only postgres is needed from here).
+# Full stack with a local PostgreSQL, for trying the production shape on a laptop.
+# For day-to-day development see README.md (run the API and Vite dev server
+# directly; only postgres is needed from here). The real production stack, which
+# uses managed PostgreSQL and prebuilt images, is docker-compose.prod.yml.
 services:
   postgres:
     image: postgres:16
@@ -50,25 +52,36 @@ services:
       GRADER_DATABASE_URL: postgresql+psycopg://grader:${POSTGRES_PASSWORD:-grader}@postgres:5432/grader
       GRADER_USE_BUBBLEWRAP: "true"
       HF_HOME: /data/hf-cache
+      UV_CACHE_DIR: /data/uv-cache
     command: ["grader-worker"]
-    # bubblewrap needs user namespaces; on hardened hosts add: security_opt: [seccomp:unconfined]
+    # bubblewrap needs unprivileged user namespaces, which Docker's default seccomp
+    # profile blocks. If grading fails with "bwrap: No permissions to create new
+    # namespace", add: security_opt: ["seccomp:unconfined", "apparmor:unconfined"]
     volumes:
       - artifacts:/data/artifacts
       - hfcache:/data/hf-cache
+      - uvcache:/data/uv-cache
     depends_on:
       migrate:
         condition: service_completed_successfully
 
-  nginx:
+  # Same Caddy image as production (deploy/web): TLS, static frontend, /api proxy.
+  # GRADER_HOST=localhost (the .env.example default) gives a locally-trusted
+  # certificate; production sets it to the public hostname.
+  proxy:
     build:
       context: .
-      dockerfile: deploy/nginx/Dockerfile
+      dockerfile: deploy/web/Dockerfile
     restart: unless-stopped
+    environment:
+      GRADER_HOST: ${GRADER_HOST:-localhost}
+      GRADER_STAGING: ${GRADER_STAGING:-0}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ${TLS_CERT_DIR:-./deploy/certs}:/etc/nginx/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - web
 
@@ -76,3 +89,6 @@ volumes:
   pgdata:
   artifacts:
   hfcache:
+  uvcache:
+  caddy_data:
+  caddy_config:

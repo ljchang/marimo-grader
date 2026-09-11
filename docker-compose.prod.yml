@@ -1,0 +1,110 @@
+# Production stack for a single droplet + DigitalOcean Managed PostgreSQL.
+# See deploy/README.md. Images are built by .github/workflows/images.yml and
+# pulled from GHCR; nothing is built on the droplet.
+#
+#   /srv/grader/
+#     docker-compose.prod.yml   (this file)
+#     .env                      (GRADER_* secrets, GRADER_DATABASE_URL -> managed PG)
+#
+# Interpolated variables (from .env):
+#   GRADER_IMAGE_TAG   image tag to run: main (default), sha-<short>, or v1.2.3
+#   GRADER_HOST        hostname Caddy serves and obtains a certificate for
+#   GRADER_STAGING     "1" on staging (adds X-Robots-Tag: noindex)
+#
+# The database is not part of this stack: GRADER_DATABASE_URL in .env points at
+# managed Postgres (postgresql+psycopg://...?sslmode=require).
+
+name: grader
+
+x-backend: &backend
+  image: ghcr.io/ljchang/marimo-grader-backend:${GRADER_IMAGE_TAG:-main}
+  env_file: .env
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  # One-shot: applies Alembic migrations, then exits. deploy.sh runs it before
+  # starting the long-lived services.
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  # FastAPI behind Caddy. --proxy-headers / --forwarded-allow-ips are baked into
+  # the image CMD; restated here so the intent is visible in one place.
+  web:
+    <<: *backend
+    command:
+      - uvicorn
+      - grader.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --proxy-headers
+      - --forwarded-allow-ips=*
+    volumes:
+      - artifacts:/data/artifacts
+    expose:
+      - "8000"
+    healthcheck:
+      # python:slim has no curl; fall back to urllib if it is missing.
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS http://localhost:8000/api/health >/dev/null 2>&1
+          || python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Autograder. Runs student notebooks under bubblewrap (no network, rlimits).
+  worker:
+    <<: *backend
+    command: ["grader-worker"]
+    environment:
+      GRADER_USE_BUBBLEWRAP: "true"
+      HF_HOME: /data/hf-cache
+      UV_CACHE_DIR: /data/uv-cache
+    volumes:
+      - artifacts:/data/artifacts
+      - hf_cache:/data/hf-cache
+      - uv_cache:/data/uv-cache
+    # bubblewrap creates unprivileged user namespaces (unshare(CLONE_NEWUSER)).
+    # Docker's default seccomp profile only allows that with CAP_SYS_ADMIN, and
+    # Ubuntu 24.04 additionally gates it behind AppArmor. If autograding fails
+    # with "bwrap: No permissions to create new namespace", uncomment the line
+    # below (the sandbox inside is still bwrap's; you are only removing the outer
+    # syscall filter for this one container) and re-run deploy.sh. Verify with:
+    #   docker compose -f docker-compose.prod.yml exec worker \
+    #     bwrap --ro-bind / / --unshare-all --dev /dev true && echo ok
+    # security_opt: ["seccomp:unconfined", "apparmor:unconfined"]
+
+  # Caddy: TLS termination (Let's Encrypt), static frontend, /api proxy.
+  proxy:
+    image: ghcr.io/ljchang/marimo-grader-web:${GRADER_IMAGE_TAG:-main}
+    restart: unless-stopped
+    environment:
+      GRADER_HOST: ${GRADER_HOST:-grader.dartbrains.org}
+      GRADER_STAGING: ${GRADER_STAGING:-0}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - caddy_data:/data        # certificates and ACME account; keep across redeploys
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  artifacts:      # submitted notebooks (content-addressed). Back this up.
+  hf_cache:
+  uv_cache:
+  caddy_data:
+  caddy_config:

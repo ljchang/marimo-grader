@@ -163,9 +163,37 @@ async function api(server, path, { method = "GET", body, token } = {}) {
   return data;
 }
 
+// ---- server status ----------------------------------------------------------
+
+const DISABLED_MSG =
+  "Sign-in for this grader is not available yet (Dartmouth SSO is still being set up). " +
+  "Check runs locally; submitting opens once sign-in is enabled.";
+
+async function submissionsEnabled(server) {
+  // Best effort: an unreachable /api/health should not block the button.
+  try {
+    const res = await fetch(`${server}/api/health`, { headers: { Accept: "application/json" } });
+    const data = await res.json();
+    return data.submissions_enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
+function newClientSubmissionId() {
+  if (globalThis.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 // ---- sign-in (device handshake) -------------------------------------------
 
 async function signIn(state, container, onSignedIn) {
+  if (!(await submissionsEnabled(state.server))) {
+    clear(container);
+    container.append(note("muted", DISABLED_MSG));
+    setStatus(state.model, "idle", "sign-in disabled");
+    return;
+  }
   const { model, server } = state;
   // Open the tab synchronously inside the click handler so popup blockers
   // allow it; we navigate it once the server hands us a verification URL.
@@ -356,6 +384,12 @@ async function submit(state, btn, out) {
   }
   btn.disabled = true;
   clear(out);
+  if (!(await submissionsEnabled(server))) {
+    btn.disabled = false;
+    out.append(note("muted", DISABLED_MSG));
+    setStatus(model, "idle", "submissions disabled");
+    return;
+  }
   out.append(note("muted", "Collecting your notebook..."));
   setStatus(model, "submitting", "");
   await refreshPayload(state);
@@ -376,6 +410,8 @@ async function submit(state, btn, out) {
       body: {
         assignment_version_id: model.get("assignment_version_id"),
         question_id: model.get("question_id"),
+        // One id per click: a retry or double-click returns the same attempt.
+        client_submission_id: newClientSubmissionId(),
         ...payload,
       },
     });
@@ -398,6 +434,16 @@ async function submit(state, btn, out) {
   clear(out);
   const card = scoreBlock(created);
   out.append(card);
+  if (created.stale) {
+    out.append(
+      note(
+        "muted",
+        `You are working on version ${created.version} of this assignment; version ` +
+          `${created.latest_version} has been published. Your submission was accepted and will be ` +
+          `graded against version ${created.version}. Open the assignment page to get the latest copy.`,
+      ),
+    );
+  }
   const spinner = note("muted", "Waiting for the grader...");
   out.append(spinner);
 

@@ -51,6 +51,7 @@ class SubmissionIn(BaseModel):
     check_results: list[dict[str, Any]] = Field(default_factory=list)
     outputs: dict[str, Any] = Field(default_factory=dict)
     client: dict[str, Any] = Field(default_factory=dict)
+    client_submission_id: str | None = Field(default=None, max_length=64)
 
 
 def _resolve(
@@ -62,13 +63,14 @@ def _resolve(
     m = membership_for(db, user, v.assignment.offering_id)
     if m is None or m.role != Role.student:
         raise api_error(403, "not_enrolled", "you are not enrolled as a student in this offering")
+    # Resolve against the version the student actually opened, not the live question list:
+    # a question dropped in a later version must still accept submissions from older copies.
     q = db.scalar(
-        select(Question).where(
-            Question.assignment_id == v.assignment_id, Question.qid == qid, Question.active
-        )
+        select(Question).where(Question.assignment_id == v.assignment_id, Question.qid == qid)
     )
-    if q is None:
-        raise api_error(404, "unknown_question", f"question {qid!r} not in this assignment")
+    snapshot_qids = {x.get("qid") for x in (v.question_snapshot or [])}
+    if q is None or (snapshot_qids and qid not in snapshot_qids):
+        raise api_error(404, "unknown_question", f"question {qid!r} not in this assignment version")
     return m.enrollment, v, q
 
 
@@ -116,6 +118,21 @@ def submission_json(db: Session, s: Submission, *, include_feedback: bool = True
     return out
 
 
+def created_json(sub: Submission, *, duplicate: bool = False) -> dict:
+    version = sub.version
+    latest = version.assignment.versions[-1] if version.assignment.versions else version
+    return {
+        "id": str(sub.id),
+        "attempt_no": sub.attempt_no,
+        "submitted_at": iso(sub.submitted_at),
+        "status": sub.status.value,
+        "version": version.version,
+        "latest_version": latest.version,
+        "stale": latest.version > version.version,
+        "duplicate": duplicate,
+    }
+
+
 @router.post("/submissions", status_code=201)
 def create_submission(
     body: SubmissionIn, user: User = Depends(current_user), db: Session = Depends(get_db)
@@ -125,6 +142,17 @@ def create_submission(
     if len(nb) > s.max_notebook_bytes:
         raise api_error(413, "too_large", f"notebook exceeds {s.max_notebook_bytes} bytes")
     enrollment, version, question = _resolve(db, user, body.assignment_version_id, body.question_id)
+
+    if body.client_submission_id:
+        existing = db.scalar(
+            select(Submission).where(
+                Submission.enrollment_id == enrollment.id,
+                Submission.question_id == question.id,
+                Submission.client_submission_id == body.client_submission_id,
+            )
+        )
+        if existing is not None:
+            return created_json(existing, duplicate=True)
 
     settings = version.assignment.settings or {}
     allowed = settings.get("attempts_allowed")
@@ -159,6 +187,7 @@ def create_submission(
         outputs_artifact_id=out_art.id if out_art else None,
         client_check_results=body.check_results[:200],
         client_meta={k: str(v)[:120] for k, v in body.client.items()},
+        client_submission_id=body.client_submission_id,
     )
     db.add(sub)
     db.flush()
@@ -172,12 +201,7 @@ def create_submission(
             {"submission_id": str(sub.id), "question_id": str(question.id), "netid": user.netid},
         )
     )
-    return {
-        "id": str(sub.id),
-        "attempt_no": sub.attempt_no,
-        "submitted_at": iso(sub.submitted_at),
-        "status": sub.status.value,
-    }
+    return created_json(sub)
 
 
 def _load_visible(db: Session, user: User, submission_id: uuid.UUID) -> Submission:
