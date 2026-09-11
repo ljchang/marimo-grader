@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: backend, changeOrigin: false },
         '/auth': { target: backend, changeOrigin: false },
-        '/a': { target: backend, changeOrigin: false },
+        '^/a/': { target: backend, changeOrigin: false },
       },
     },
     build: {

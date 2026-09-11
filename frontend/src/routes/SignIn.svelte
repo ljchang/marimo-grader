@@ -3,11 +3,10 @@
 </script>
 
 <main class="page narrow signin">
-  <p class="eyebrow">DartBrains Grader</p>
   <h1>Sign in with your Dartmouth NetID</h1>
   <p class="muted">
-    Grading, rosters and feedback for marimo assignments. You will be sent to Dartmouth Web
-    Authentication and returned here.
+    This is where DartBrains assignments are submitted and graded. Sign-in goes through Dartmouth
+    Web Authentication and brings you back here.
   </p>
   <button class="primary" onclick={() => auth.signIn()}>Continue to Dartmouth sign-in</button>
 </main>
@@ -17,8 +16,7 @@
     padding-top: 72px;
   }
   h1 {
-    margin: 8px 0 10px;
-    font-size: 26px;
+    margin: 0 0 10px;
   }
   p.muted {
     max-width: 52ch;

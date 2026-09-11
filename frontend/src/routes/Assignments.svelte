@@ -205,8 +205,9 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Offering'}</a> · assignments</p>
+    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Course'}</a></p>
     <h1>Assignments</h1>
+    <p class="eyebrow" style="margin-top:6px">Tick assignments to export their grades to Canvas.</p>
   </div>
   <div class="row">
     {#if exportIds.size > 0}
@@ -256,7 +257,7 @@
 {#if assignments === null}
   <Loading />
 {:else if assignments.length === 0 && !showNew}
-  <p class="empty">No assignments yet. Create one, then upload its first notebook version.</p>
+  <p class="empty">No assignments yet. The usual path is <code>grader publish</code> from the assignments repository, which creates the assignment and its first version. You can also create one here and upload a version by hand.</p>
 {:else}
   {#each assignments as a (a.id)}
     <section class="block assignment">
@@ -264,7 +265,7 @@
         <h2>
           <label class="pick" title="Include in Canvas export"><input type="checkbox" checked={exportIds.has(a.id)} onchange={() => toggleExport(a.id)} /></label>
           {a.title} <span class="mono muted small">{a.slug}</span>
-          <span class="count">v{a.latest_version ?? '—'}</span>
+          <span class="muted small" style="font-weight:400">version {a.latest_version ?? 'none yet'}</span>
         </h2>
         <div class="row">
           <button class="quiet" onclick={() => (editing === a.id ? (editing = null) : startEdit(a))}>{editing === a.id ? 'Cancel' : 'Edit settings'}</button>
@@ -278,7 +279,7 @@
         <div><dt>Policy</dt><dd>{fmtPolicy(a.settings.grade_policy)}</dd></div>
         <div><dt>Environments</dt><dd>{a.settings.environments.length > 0 ? a.settings.environments.join(', ') : 'none'}</dd></div>
         <div><dt>Check logging</dt><dd>{a.settings.log_checks ? 'on' : 'off'}</dd></div>
-        <div><dt>Questions</dt><dd class="num">{a.questions.length} · {trim(a.questions.reduce((n, q) => n + q.max_points, 0))} pts</dd></div>
+        <div><dt>Questions</dt><dd class="num">{a.questions.length}, {trim(a.questions.reduce((n, q) => n + q.max_points, 0))} pts</dd></div>
       </dl>
 
       {#if editing === a.id}
@@ -316,14 +317,13 @@
       {#if a.questions.length > 0}
         <div class="tablewrap">
           <table class="data">
-            <thead><tr><th>#</th><th>qid</th><th>Title</th><th>Mode</th><th class="num">Max</th><th></th></tr></thead>
+            <thead><tr><th>Question</th><th>Title</th><th>Graded</th><th class="num">Points</th><th></th></tr></thead>
             <tbody>
               {#each [...a.questions].sort((x, y) => x.order - y.order) as q (q.id)}
                 <tr>
-                  <td class="num muted">{q.order}</td>
                   <td class="mono">{q.qid}</td>
-                  <td class="wrap">{q.title}</td>
-                  <td><span class="chip">{q.grading_mode}</span></td>
+                  <td class="wrap">{q.title === q.qid ? '' : q.title}</td>
+                  <td>{q.grading_mode === 'auto' ? 'automatically' : q.grading_mode === 'manual' ? 'by hand' : 'partly by hand'}</td>
                   <td class="num">{trim(q.max_points)}</td>
                   <td>{#if q.grading_mode !== 'auto'}<a class="small" href="/o/{offeringId}/grade/{q.id}">Grading queue</a>{/if}</td>
                 </tr>
@@ -332,7 +332,7 @@
           </table>
         </div>
       {:else}
-        <p class="empty">No questions until a version is uploaded.</p>
+        <p class="empty">Questions appear once a version is published.</p>
       {/if}
     </section>
   {/each}
@@ -348,8 +348,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 24px;
-    margin: 0 0 12px;
-    font-size: 13px;
+    margin: 0 0 14px;
+    font-size: 14px;
   }
   dl.settings div {
     display: flex;

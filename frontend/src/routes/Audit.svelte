@@ -51,8 +51,7 @@
 <div class="audit">
   {#if scope === 'offering'}
     <div class="page-head">
-      <div><p class="eyebrow">Audit log</p><h1>Who changed what</h1></div>
-      <span class="muted small">Grade changes, roster imports, settings, publishes, exports</span>
+      <div><h1>Change log</h1><p class="eyebrow">Grade changes, roster imports, settings, publishes, and exports for this course.</p></div>
     </div>
   {/if}
 
@@ -100,7 +99,7 @@
   .tablewrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  th { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  th { font-size: 13px; color: var(--muted); }
   .nowrap { white-space: nowrap; }
   .mono { font-family: var(--mono, ui-monospace, monospace); font-size: 0.85rem; }
 </style>

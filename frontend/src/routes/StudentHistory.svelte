@@ -86,12 +86,13 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Triage'}</a> · student</p>
-    <h1>{history?.display_name ?? netid} <span class="muted mono" style="font-weight:400;font-size:15px">{netid}</span></h1>
+    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Course'}</a></p>
+    <h1>{history?.display_name ?? netid} <span class="muted mono" style="font-weight:400;font-size:16px">{netid}</span></h1>
   </div>
   <div class="meta">
     {#if history?.section}<span>Section {history.section}</span>{/if}
-    <span>{history?.submissions.length ?? 0} submissions</span>
+    <span>{history?.submissions.length ?? 0} {(history?.submissions.length ?? 0) === 1 ? 'submission' : 'submissions'}</span>
+    <a class="small" href="/o/{offeringId}/audit">Change log</a>
   </div>
 </div>
 
@@ -100,7 +101,7 @@
 {#if history === null && !error}
   <Loading />
 {:else if groups.length === 0}
-  <p class="empty">No submissions yet.</p>
+  <p class="empty">This student has not submitted anything yet.</p>
 {:else}
   {#each groups as ag (ag.key)}
     <section class="block">
@@ -150,7 +151,8 @@
 
 <style>
   td.feedback {
-    max-width: 36ch;
-    color: var(--muted);
+    max-width: 40ch;
+    white-space: normal;
+    color: var(--ink);
   }
 </style>

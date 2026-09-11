@@ -11,11 +11,15 @@
   const label = $derived.by(() => {
     switch (state) {
       case 'none':
-        return '·';
+        return '—';
       case 'graded':
         return points !== null ? fmtPoints(points, max) : 'graded';
       case 'awaiting_manual':
-        return 'awaiting';
+      case 'submitted':
+      case 'received':
+        return 'waiting';
+      case 'checking':
+        return 'checking';
       case 'failed':
         return 'failed';
       default:

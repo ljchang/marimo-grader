@@ -47,7 +47,7 @@
     }
     const lastAt = subs.reduce<string | null>((m, s) => (!m || s.submitted_at > m ? s.submitted_at : m), null);
     return {
-      status: allGraded ? 'graded' : anyGraded ? 'graded' : 'submitted',
+      status: allGraded ? 'graded' : anyGraded ? 'in progress' : 'submitted',
       points: anyGraded ? points : null,
       max,
       attempts: subs.length,
@@ -80,10 +80,9 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow">{enrollment?.course_slug ?? ''} · {enrollment?.term ?? ''}</p>
     <h1>{enrollment?.title ?? 'Assignments'}</h1>
+    <p class="eyebrow">{enrollment?.term ?? ''}, signed in as {auth.me?.display_name ?? auth.me?.netid}</p>
   </div>
-  <div class="meta"><span>{auth.me?.display_name ?? auth.me?.netid}</span></div>
 </div>
 
 {#if error}<Notice kind="error" label="Error">{error}</Notice>{/if}
@@ -91,7 +90,7 @@
 {#if assignments === null}
   <Loading />
 {:else if assignments.length === 0}
-  <p class="empty">No assignments have been released yet.</p>
+  <p class="empty">No assignments have been released yet. They appear here as your instructor publishes them.</p>
 {:else}
   <div class="tablewrap">
     <table class="data">
@@ -109,14 +108,14 @@
         {#each assignments as a (a.id)}
           {@const s = summarize(a)}
           <tr>
-            <td class="wrap"><strong>{a.title}</strong><span class="sub">{a.questions.length} question{a.questions.length === 1 ? '' : 's'} · {fmtPolicy(a.settings.grade_policy)}</span></td>
+            <td class="wrap"><strong>{a.title}</strong><span class="sub">{a.questions.length} question{a.questions.length === 1 ? '' : 's'}, {fmtPolicy(a.settings.grade_policy)}</span></td>
             <td>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : '—'}</td>
-            <td><span class="chip {s.status === 'graded' ? 'graded' : s.status === 'submitted' ? 'submitted' : 'none'}">{s.status}</span></td>
+            <td><span class="chip {s.status === 'graded' ? 'graded' : s.status === 'submitted' ? 'submitted' : s.status === 'in progress' ? 'progress' : 'none'}">{s.status === 'submitted' ? 'waiting for grade' : s.status}</span></td>
             <td class="num">{fmtPoints(s.points, s.max)}</td>
             <td class="num">{a.settings.attempts_allowed ? `${s.attempts} / ${a.settings.attempts_allowed}` : s.attempts}</td>
             <td>
               {#if s.attempts > 0}
-                <button class="quiet" onclick={() => (expanded = expanded === a.id ? null : a.id)}>{expanded === a.id ? 'Hide attempts' : 'Attempts and feedback'}</button>
+                <button class="quiet" onclick={() => (expanded = expanded === a.id ? null : a.id)}>{expanded === a.id ? 'Hide attempts' : 'See attempts and feedback'}</button>
               {/if}
             </td>
           </tr>
@@ -126,9 +125,9 @@
                 {#each [...a.questions].sort((x, y) => x.order - y.order) as q (q.id)}
                   {@const attempts = attemptsFor(a, q.id)}
                   <div class="question">
-                    <h3><span class="mono">{q.qid}</span> {q.title} <span class="muted small num">{trim(q.max_points)} pts</span></h3>
+                    <h3><span class="mono">{q.qid}</span> {q.title && q.title !== q.qid ? q.title : ''} <span class="muted small num">{trim(q.max_points)} pts</span></h3>
                     {#if attempts.length === 0}
-                      <p class="empty">No attempts.</p>
+                      <p class="empty">Not submitted yet.</p>
                     {:else}
                       <table class="data attempts">
                         <thead><tr><th class="num">Attempt</th><th>Submitted</th><th>Status</th><th class="num">Points</th><th>Feedback</th><th></th></tr></thead>
@@ -182,6 +181,7 @@
   }
   td.feedback {
     max-width: 44ch;
+    white-space: normal;
     color: var(--ink);
   }
 </style>

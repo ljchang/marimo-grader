@@ -204,19 +204,17 @@
 <div class="queue">
   <header class="bar">
     <div class="left">
-      <a href="/o/{offeringId}" class="back">Triage</a>
+      <a href="/o/{offeringId}" class="back">{enrollment?.title ?? 'Course'}</a>
       <span class="muted">/</span>
       <span class="mono">{question?.qid ?? questionId}</span>
       {#if question}
-        <span class="muted">{question.assignment.title} · {question.title}</span>
-        {#if maxPoints !== null}<span class="muted">· {trim(maxPoints)} pts</span>{/if}
+        <span class="muted">{question.assignment.title}{question.title && question.title !== question.qid ? `, ${question.title}` : ''}{#if maxPoints !== null}, {trim(maxPoints)} pts{/if}</span>
       {/if}
     </div>
     <div class="right">
       <span class="live {stream}"></span>
       {#if pendingNew > 0}<span class="muted small">{pendingNew} new in queue</span>{/if}
       <span class="progress num">{doneCount} of {items.length} graded</span>
-      <span class="muted small">{enrollment?.title ?? ''}</span>
     </div>
   </header>
 
@@ -226,7 +224,7 @@
     <div class="pad"><Loading label="Loading queue" /></div>
   {:else if items.length === 0}
     <div class="pad">
-      <p class="empty">Nothing waiting for manual grading on this question. <a href="/o/{offeringId}">Back to triage.</a></p>
+      <p class="empty">Nothing is waiting for a grade on this question. <a href="/o/{offeringId}">Back to the course</a>.</p>
     </div>
   {:else if current}
     <div class="panes">
@@ -242,8 +240,7 @@
             <strong>{current.display_name || current.netid}</strong>
             <span class="muted mono small">{current.netid}</span>
             <span class="sub muted small" title={fmtDateTime(current.submitted_at)}>
-              attempt {current.attempt_no} · {fmtRelative(current.submitted_at)}
-              {#if current.client}· {current.client.env}{/if}
+              attempt {current.attempt_no}, {fmtRelative(current.submitted_at)}{#if current.client?.env}, from {current.client.env}{/if}
             </span>
           </div>
           <div class="nav">
@@ -254,9 +251,9 @@
         </div>
 
         {#if current.done}
-          <Notice label="Graded">Score saved{current.score?.points != null ? `: ${trim(current.score.points)}` : ''}. You can edit and resubmit.</Notice>
+          <Notice label="Graded">Score saved{current.score?.points != null ? `: ${trim(current.score.points)}` : ''}. You can change it and save again.</Notice>
         {:else if current.score?.auto_points != null}
-          <p class="small muted">Autograder: <span class="num">{trim(current.score.auto_points)}</span> pts</p>
+          <p class="muted">The autograder gave <span class="num">{trim(current.score.auto_points)}</span> pts for the checked parts.</p>
         {/if}
 
         <form onsubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -291,7 +288,7 @@
             <span>
               Manual points
               {#if rubric.length > 0 && !manualTouched}<span class="muted">(sum of rubric)</span>{/if}
-              {#if maxPoints !== null}<span class="muted">· max {trim(maxPoints)}</span>{/if}
+              {#if maxPoints !== null}<span class="muted">(up to {trim(maxPoints)})</span>{/if}
             </span>
             <input
               type="number"
@@ -311,21 +308,21 @@
           </label>
 
           <label class="field">
-            <span>Feedback <span class="muted">(f)</span></span>
-            <textarea bind:this={feedbackEl} bind:value={feedback} rows="7" placeholder="What the student should take away."></textarea>
+            <span>Feedback <span class="muted">(press f to jump here)</span></span>
+            <textarea bind:this={feedbackEl} bind:value={feedback} rows="7" placeholder="What the student should take away from this attempt."></textarea>
           </label>
 
           <label class="field inline">
             <input type="checkbox" bind:checked={final} />
-            <span>Final (release to student)</span>
+            <span>Release this grade to the student</span>
           </label>
 
           {#if flash}<p class="small" style="color:var(--accent)">{flash}</p>{/if}
 
           <div class="actions">
-            <button type="submit" class="primary" disabled={submitting}>{submitting ? 'Saving' : current.done ? 'Resave score' : 'Submit score'}</button>
+            <button type="submit" class="primary" disabled={submitting}>{submitting ? 'Saving' : current.done ? 'Save again' : 'Save score'}</button>
             <span class="muted small">
-              <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>⌘</kbd><kbd>Enter</kbd> submit
+              <kbd>j</kbd> next, <kbd>k</kbd> previous, <kbd>⌘</kbd><kbd>Enter</kbd> saves
             </span>
           </div>
         </form>
@@ -342,7 +339,7 @@
           </section>
         {/if}
         <p class="small muted history">
-          <a href="/o/{offeringId}/students/{current.netid}">All attempts by {current.netid}</a>
+          <a href="/o/{offeringId}/students/{current.netid}">All submissions by {current.netid}</a>
         </p>
       </aside>
     </div>
@@ -361,9 +358,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 20px;
+    padding: 10px 20px;
     border-bottom: 1px solid var(--rule);
-    font-size: 13px;
+    font-size: 14px;
     flex-wrap: wrap;
   }
   .bar .left,
@@ -430,7 +427,7 @@
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 12px;
-    font-size: 13px;
+    font-size: 14px;
   }
   table.rubric td {
     padding: 5px 4px;
@@ -472,7 +469,7 @@
   }
 
   .outputs { margin-top: 1rem; }
-  .outputs h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem; }
+  .outputs h3 { font-size: 15px; margin: 0 0 8px; }
   .output { margin-bottom: 0.6rem; }
   .output-key { font-family: var(--mono, ui-monospace, monospace); font-size: 0.8rem; color: var(--muted); }
   .output-value { white-space: pre-wrap; word-break: break-word; background: var(--surface, rgba(0,0,0,0.04)); border: 1px solid var(--rule); border-radius: 4px; padding: 0.5rem 0.65rem; margin: 0.2rem 0 0; font: inherit; font-size: 0.95rem; max-height: 18rem; overflow: auto; }

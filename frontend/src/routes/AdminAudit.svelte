@@ -9,10 +9,9 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow">Platform admin</p>
     <h1>Audit log</h1>
+    <p class="eyebrow">Courses, offerings, staff, publishes, roster imports, and exports. Grade changes are only visible to each course's instructors.</p>
   </div>
-  <span class="muted small">Courses, offerings, staff, publishes, roster imports, exports. Grade changes are only visible to each offering's instructors.</span>
 </div>
 
 <Audit scope="platform" />

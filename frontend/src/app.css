@@ -73,8 +73,8 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -109,16 +109,17 @@ h3 {
   letter-spacing: -0.01em;
 }
 h1 {
-  font-size: 22px;
+  font-size: 26px;
+  line-height: 1.15;
 }
 h2 {
-  font-size: 16px;
+  font-size: 17px;
 }
 h3 {
-  font-size: 14px;
+  font-size: 15px;
 }
 p {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 code,
@@ -140,14 +141,19 @@ code {
   text-align: right;
 }
 .small {
-  font-size: 12px;
+  font-size: 13px;
 }
+/* Context line above a page title: a breadcrumb or a role note, never a label. */
 .eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+.eyebrow a {
+  color: var(--muted);
+}
+.eyebrow a:hover {
   color: var(--accent);
-  font-weight: 600;
 }
 
 /* Layout ------------------------------------------------------------------ */
@@ -156,7 +162,7 @@ code {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 20px 20px 64px;
+  padding: 28px 20px 72px;
 }
 .page.narrow {
   max-width: 880px;
@@ -173,29 +179,29 @@ code {
 .page-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 8px 20px;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
 }
 .page-head .meta {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 section.block {
-  margin-bottom: 28px;
+  margin-bottom: 40px;
 }
 .block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 6px;
-  margin-bottom: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--rule);
 }
 .block-head h2 {
@@ -226,8 +232,11 @@ section.block {
 
 .card {
   background: var(--surface);
-  border-radius: var(--radius);
-  padding: 14px 16px;
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+.card h3 {
+  margin-bottom: 12px;
 }
 .grid-2 {
   display: grid;
@@ -238,7 +247,6 @@ section.block {
 .empty {
   color: var(--muted);
   padding: 8px 0;
-  font-size: 13px;
 }
 
 /* Tables ------------------------------------------------------------------ */
@@ -249,21 +257,19 @@ section.block {
 table.data {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 table.data th,
 table.data td {
   text-align: left;
   vertical-align: top;
-  padding: 6px 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
 table.data th {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--muted);
   font-weight: 600;
   border-bottom: 2px solid var(--rule);
@@ -285,51 +291,41 @@ table.data tbody tr:hover {
 table.data td .sub {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* Chips ------------------------------------------------------------------- */
 
+/* Status words share the class-progress grid's vocabulary: points, waiting, failed, dash. */
 .chip {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  padding: 0 6px;
-  border-radius: 3px;
+  font-size: 14px;
   white-space: nowrap;
-  background: var(--surface);
   color: var(--muted);
-  border: 1px solid transparent;
 }
 .chip.none {
-  color: var(--muted);
-  background: transparent;
-  border-color: var(--rule);
+  color: var(--rule);
 }
 .chip.checking,
-.chip.received {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
+.chip.received,
 .chip.submitted,
 .chip.awaiting_manual {
-  background: var(--surface);
-  color: var(--ink);
-  border-color: var(--rule);
+  color: var(--warn);
 }
 .chip.graded {
-  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 600;
+}
+.chip.progress {
+  color: var(--ink);
 }
 .chip.failed {
-  background: var(--danger-soft);
   color: var(--danger);
 }
 .chip.role {
-  text-transform: capitalize;
   font-family: var(--sans);
-  font-size: 12px;
+  color: var(--ink);
 }
 
 /* Controls ---------------------------------------------------------------- */
@@ -338,9 +334,9 @@ button,
 .btn {
   appearance: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
-  padding: 7px 12px;
+  padding: 8px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--rule);
   background: var(--paper);
@@ -390,12 +386,12 @@ input,
 select,
 textarea {
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  padding: 6px 8px;
+  padding: 7px 10px;
   width: 100%;
 }
 input[type="number"] {
@@ -425,7 +421,7 @@ textarea {
 }
 .field > span,
 .field > label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .field.inline {
@@ -466,10 +462,9 @@ kbd {
 .notice {
   border-left: 3px solid var(--accent);
   background: var(--surface);
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 0 var(--radius) var(--radius) 0;
-  margin: 10px 0;
-  font-size: 13px;
+  margin: 12px 0;
 }
 .notice.error {
   border-color: var(--danger);
@@ -480,9 +475,6 @@ kbd {
 }
 .notice .label {
   display: block;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   font-weight: 600;
   margin-bottom: 2px;
 }
@@ -524,6 +516,6 @@ iframe.render {
     padding: 14px 16px 48px;
   }
   h1 {
-    font-size: 19px;
+    font-size: 22px;
   }
 }

@@ -12,7 +12,7 @@
   <iframe class="render" {src} {title} sandbox="allow-scripts" referrerpolicy="no-referrer" style:height></iframe>
 {:else}
   <div class="pending" style:height>
-    <span class="muted small">Rendering not available yet.</span>
+    <span class="muted">The notebook is still being rendered. Check back in a minute.</span>
   </div>
 {/if}
 

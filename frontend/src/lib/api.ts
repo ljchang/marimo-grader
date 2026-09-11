@@ -366,6 +366,7 @@ export interface AdminOffering {
   term: string;
   title: string;
   settings?: OfferingSettings;
+  instructors?: string[];
 }
 
 export interface OfferingCreate {

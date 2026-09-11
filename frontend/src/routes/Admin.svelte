@@ -85,10 +85,9 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow">Platform admin</p>
-    <h1>Courses, offerings, instructors</h1>
+    <h1>Courses and offerings</h1>
+    <p class="eyebrow">Create courses, add a term, and name each term's instructors. No student data lives on this page.</p>
   </div>
-  <span class="muted small">No student data on this page.</span>
 </div>
 
 {#if error}<Notice kind="error" label="Error">{error}</Notice>{/if}
@@ -99,22 +98,21 @@
   {#if courses === null}
     <Loading />
   {:else if courses.length === 0}
-    <p class="empty">No courses yet.</p>
+    <p class="empty">No courses yet. Create the first one below.</p>
   {:else}
     <div class="tablewrap">
       <table class="data">
         <thead>
-          <tr><th>Slug</th><th>Title</th><th>Offerings</th><th>Id</th></tr>
+          <tr><th>Course</th><th>Terms (instructors)</th><th>Course id</th></tr>
         </thead>
         <tbody>
           {#each courses as c (c.id)}
             <tr>
-              <td class="mono">{c.slug}</td>
-              <td class="wrap">{c.title}</td>
+              <td class="wrap"><strong>{c.title}</strong><span class="sub mono">{c.slug}</span></td>
               <td class="wrap">
                 {#if c.offerings && c.offerings.length > 0}
-                  {#each c.offerings as o (o.id)}
-                    <span class="chip">{o.term}</span>{' '}
+                  {#each c.offerings as o, i (o.id)}
+                    <span class="mono">{o.term}</span>{#if o.instructors?.length}&nbsp;<span class="muted">({o.instructors.join(', ')})</span>{/if}{i < c.offerings.length - 1 ? ', ' : ''}
                   {/each}
                 {:else}
                   <span class="muted">—</span>

@@ -34,6 +34,7 @@
       <nav class="ctx" aria-label="Administration">
         <span class="crumb"><span>Platform administration</span></span>
         <a href="/admin" class:active={active('/admin', true)}>Courses &amp; offerings</a>
+        <a href="/admin/audit" class:active={active('/admin/audit')}>Audit log</a>
       </nav>
     {:else if offering}
       <nav class="ctx" aria-label="Offering">

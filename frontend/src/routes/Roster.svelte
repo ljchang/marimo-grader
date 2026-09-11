@@ -137,10 +137,10 @@
 
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Offering'}</a> · roster</p>
+    <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Course'}</a></p>
     <h1>Roster</h1>
   </div>
-  <div class="meta"><span>{roster?.length ?? 0} enrolled</span></div>
+  <div class="meta"><span>{roster?.length ?? 0} enrolled, including staff</span></div>
 </div>
 
 {#if error}<Notice kind="error" label="Error">{error}</Notice>{/if}
@@ -151,7 +151,7 @@
 {/if}
 
 <section class="block">
-  <div class="block-head"><h2>Import</h2><span class="muted small">Canvas gradebook export or Banner class list</span></div>
+  <div class="block-head"><h2>Import students</h2><span class="muted small">Upload a Canvas gradebook export or a Banner class list. You review the changes before anything is applied.</span></div>
   <form class="card import" onsubmit={runPreview}>
     <div class="row">
       <label class="field" style="margin:0;flex:1;min-width:220px">
@@ -172,7 +172,7 @@
   <section class="block">
     <div class="block-head">
       <h2>Preview <span class="count" class:hot={changeCount > 0}>{changeCount}</span></h2>
-      <span class="muted small">Untick a row to leave it out.</span>
+      <span class="muted small">Untick a row to leave it out. Dropped students keep their submissions and grades.</span>
     </div>
 
     <div class="grid-2">
@@ -223,14 +223,14 @@
 {/if}
 
 <section class="block">
-  <div class="block-head"><h2>Teaching staff</h2><span class="muted small">Add a TA or co-instructor by NetID</span></div>
+  <div class="block-head"><h2>Teaching staff</h2><span class="muted small">Add a TA or co-instructor by NetID. They sign in with Dartmouth like everyone else.</span></div>
   <form class="card import" onsubmit={addStaff}>
     <div class="row">
       <label class="field" style="margin:0;min-width:160px"><span>NetID</span><input id="staff-netid" type="text" bind:value={staffNetid} required placeholder="f00abc1" /></label>
       <label class="field" style="margin:0"><span>Role</span>
         <select id="staff-role" bind:value={staffRole}><option value="ta">TA</option><option value="instructor">Instructor</option></select>
       </label>
-      <label class="field" style="margin:0;min-width:200px"><span>Sections (TA only, comma-separated; blank = all)</span><input id="staff-sections" type="text" bind:value={staffSections} placeholder="01, 02" disabled={staffRole !== 'ta'} /></label>
+      <label class="field" style="margin:0;min-width:200px"><span>Sections a TA may grade (comma-separated, blank for all)</span><input id="staff-sections" type="text" bind:value={staffSections} placeholder="01, 02" disabled={staffRole !== 'ta'} /></label>
       <label class="field" style="margin:0;min-width:160px"><span>Display name (optional)</span><input id="staff-name" type="text" bind:value={staffName} /></label>
       <button class="primary" type="submit" disabled={!staffNetid.trim()}>Add</button>
     </div>
@@ -243,7 +243,7 @@
   {#if roster === null}
     <Loading />
   {:else if roster.length === 0}
-    <p class="empty">Nobody is enrolled yet.</p>
+    <p class="empty">Nobody is enrolled yet. Import the Canvas roster above.</p>
   {:else}
     <div class="tablewrap">
       <table class="data">
@@ -254,8 +254,8 @@
               <td class="mono">{r.netid}</td>
               <td class="wrap">{r.display_name}</td>
               <td>{r.section ?? '—'}</td>
-              <td><span class="chip role">{r.role}</span>{#if r.active === false}<span class="muted small"> dropped</span>{/if}</td>
-              <td>{#if r.role === 'student'}<a class="small" href="/o/{offeringId}/students/{r.netid}">History</a>{/if}</td>
+              <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}{#if r.active === false}<span class="muted"> (dropped)</span>{/if}</td>
+              <td>{#if r.role === 'student'}<a href="/o/{offeringId}/students/{r.netid}">Submissions</a>{/if}</td>
             </tr>
           {/each}
         </tbody>
@@ -264,7 +264,7 @@
   {/if}
 </section>
 
-<p class="small muted" id="roster-audit" style="margin-top:1.5rem">Every grade, roster, and settings change is recorded. <a href="/o/{offeringId}/audit">Open the change log</a> if you ever need to trace one.</p>
+<p class="muted" id="roster-audit" style="margin-top:8px">Every grade, roster, and settings change is recorded. <a href="/o/{offeringId}/audit">Open the change log</a> if you ever need to trace one.</p>
 
 <style>
   .import .row {
@@ -276,11 +276,11 @@
     margin: 0;
     display: flex;
     gap: 14px;
-    flex-direction: column;
+    flex-wrap: wrap;
   }
   fieldset.src legend {
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
   fieldset.src label {
     white-space: nowrap;
