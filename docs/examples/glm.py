@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo", "numpy", "grader-client", "mograder"]
+# dependencies = ["marimo", "numpy", "marimo-grader-client", "mograder"]
 # ///
 """Example instructor notebook: GLM assignment with two questions.
 
@@ -20,7 +20,7 @@ def _():
     import marimo as mo
     import numpy as np
 
-    from grader_client import Grader
+    from marimo_grader_client import Grader
 
     g = Grader()  # reads server / offering / assignment / version from this file's PEP 723 block
     return Grader, g, mo, np

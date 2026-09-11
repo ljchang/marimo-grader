@@ -16,7 +16,7 @@ MODES = ("signin", "submit", "feedback")
 STATUSES = ("idle", "pending", "approved", "submitting", "done", "error")
 
 _ESM = r"""
-// grader-client widget. No dependencies. Every network call is made from the
+// marimo-grader-client widget. No dependencies. Every network call is made from the
 // student's browser with fetch(); the kernel never sees the token.
 
 const SUBMISSION_POLL_MS = 3000;
@@ -76,7 +76,7 @@ function serverOf(model) {
 
 function clientName(model) {
   const c = (model.get("payload") || {}).client || {};
-  return `${c.package || "grader-client"}/${c.version || "0"}`;
+  return `${c.package || "marimo-grader-client"}/${c.version || "0"}`;
 }
 
 // ---- token storage ---------------------------------------------------------

@@ -1,7 +1,7 @@
 import pytest
 import traitlets
 
-from grader_client.widget import MODES, STATUSES, GraderWidget
+from marimo_grader_client.widget import MODES, STATUSES, GraderWidget
 
 
 def test_trait_defaults():

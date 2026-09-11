@@ -338,7 +338,7 @@ def detect_env() -> str:
 
 
 def client_info(version: str) -> dict[str, str]:
-    return {"package": "grader-client", "version": version, "env": detect_env()}
+    return {"package": "marimo-grader-client", "version": version, "env": detect_env()}
 
 
 def build_payload(

@@ -11,7 +11,7 @@ The design document is in [`docs/design.html`](docs/design.html); the API contra
 ```
 backend/   FastAPI service + worker  (Python, PostgreSQL, SQLAlchemy 2, Alembic, python3-saml)
 frontend/  Instructor, TA and student UI  (Svelte 5 runes, TypeScript, Vite)
-client/    grader-client: the anywidget students see in the notebook  (Python, anywidget)
+client/    marimo-grader-client: the anywidget students see in the notebook  (Python, anywidget)
 deploy/    Caddy image, droplet bootstrap/deploy scripts, DigitalOcean runbook
 docs/      design document and API contract
 ```
@@ -80,10 +80,10 @@ uv run grader publish path/to/glm.py --server http://localhost:8000 \
 The command signs you in through the device handshake, generates the student version, uploads
 both, and writes `glm_student.py` with the server, offering, assignment, and version ids embedded
 in its PEP 723 block. That file is what dartbrains.org links to. Inside it, the assignment cells
-use `grader-client`:
+use `marimo-grader-client`:
 
 ```python
-from grader_client import Grader
+from marimo_grader_client import Grader
 g = Grader()                 # reads server/ids from the notebook's PEP 723 block
 g.signin_button()
 g.check("glm-q01: Load the data", [(bold.shape[0] == 128, "Expected 128 volumes")])

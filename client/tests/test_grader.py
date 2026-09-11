@@ -1,7 +1,7 @@
 import pytest
 
-import grader_client
-from grader_client import Grader, GraderWidget, _Html, check, render_check_html
+import marimo_grader_client
+from marimo_grader_client import Grader, GraderWidget, _Html, check, render_check_html
 
 SRC = """import marimo
 
@@ -28,7 +28,7 @@ def _clean_env(monkeypatch):
 
 @pytest.fixture
 def no_mograder(monkeypatch):
-    monkeypatch.setattr(grader_client, "_mograder_check", lambda: None)
+    monkeypatch.setattr(marimo_grader_client, "_mograder_check", lambda: None)
 
 
 def test_argument_beats_metadata_beats_env(monkeypatch):
@@ -63,8 +63,8 @@ def test_widgets_carry_context(no_mograder):
     assert w.assignment_version_id == "meta-version"
     assert w.payload["notebook"] == SRC
     assert w.payload["outputs"] == {"plot": "..."}
-    assert w.payload["client"]["package"] == "grader-client"
-    assert w.payload["client"]["version"] == grader_client.__version__
+    assert w.payload["client"]["package"] == "marimo-grader-client"
+    assert w.payload["client"]["version"] == marimo_grader_client.__version__
 
     f = g.feedback("q03")
     assert f.mode == "feedback"

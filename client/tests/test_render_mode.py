@@ -1,4 +1,4 @@
-from grader_client import Grader
+from marimo_grader_client import Grader
 
 
 def test_widgets_become_placeholders_in_render_mode(monkeypatch):

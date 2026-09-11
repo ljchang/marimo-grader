@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "grader-client"
+name = "marimo-grader-client"
 version = "0.1.0"
 description = "Notebook-side client for the dartbrains grader: sign-in, submit and feedback widgets for marimo"
 readme = "README.md"
@@ -22,7 +22,7 @@ mograder = ["mograder>=0.3"]
 dev = ["pytest>=8", "ruff"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/grader_client"]
+packages = ["src/marimo_grader_client"]
 
 [tool.ruff]
 line-length = 100

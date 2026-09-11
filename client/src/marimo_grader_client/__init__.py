@@ -1,14 +1,14 @@
-"""grader-client: notebook-side widgets for the dartbrains grader.
+"""marimo-grader-client: notebook-side widgets for the dartbrains grader.
 
 Typical assignment cell::
 
-    from grader_client import Grader
+    from marimo_grader_client import Grader
 
     grader = Grader()            # reads server/version ids from the notebook
     grader.signin_button()       # once per notebook
     grader.submit_button("q03")  # one per question
 
-Every network call happens in the browser (see :mod:`grader_client.widget`);
+Every network call happens in the browser (see :mod:`marimo_grader_client.widget`);
 the kernel only reads the notebook file and assembles the payload.
 """
 
@@ -19,7 +19,7 @@ import os
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from grader_client.notebook import (
+from marimo_grader_client.notebook import (
     build_payload,
     client_info,
     collect_check_results,
@@ -27,7 +27,7 @@ from grader_client.notebook import (
     read_assignment_metadata,
     read_notebook_source,
 )
-from grader_client.widget import GraderWidget
+from marimo_grader_client.widget import GraderWidget
 
 __version__ = "0.1.0"
 

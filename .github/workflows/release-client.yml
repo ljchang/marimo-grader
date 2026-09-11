@@ -1,6 +1,6 @@
-# Publishes grader-client to PyPI on a tag like client-v0.1.0.
+# Publishes marimo-grader-client to PyPI on a tag like client-v0.1.0.
 # Uses PyPI trusted publishing: on pypi.org, add a "pending publisher" for project
-# grader-client with owner ljchang, repo marimo-grader, workflow release-client.yml,
+# marimo-grader-client with owner ljchang, repo marimo-grader, workflow release-client.yml,
 # environment pypi. No API token is stored in GitHub.
 name: release-client
 on:

@@ -1,6 +1,6 @@
 import json
 
-from grader_client.notebook import (
+from marimo_grader_client.notebook import (
     build_payload,
     collect_check_results,
     read_assignment_metadata,
@@ -12,7 +12,7 @@ TOP_LEVEL = """import marimo
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo", "grader-client"]
+# dependencies = ["marimo", "marimo-grader-client"]
 # mograder-assignment = "week03-glm"
 # mograder-cell-hashes = "abc123,def456"
 # mograder-hidden-tests = true
@@ -146,11 +146,11 @@ def test_collect_check_results_sidecar(tmp_path, monkeypatch):
 
 
 def test_build_payload_shape():
-    p = build_payload("src", [{"label": "a"}], {"fig": "png"}, {"package": "grader-client"})
+    p = build_payload("src", [{"label": "a"}], {"fig": "png"}, {"package": "marimo-grader-client"})
     assert p == {
         "notebook": "src",
         "check_results": [{"label": "a"}],
         "outputs": {"fig": "png"},
-        "client": {"package": "grader-client"},
+        "client": {"package": "marimo-grader-client"},
     }
     assert build_payload(None) == {"notebook": "", "check_results": [], "outputs": {}, "client": {}}

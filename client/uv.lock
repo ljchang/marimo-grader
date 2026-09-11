@@ -338,40 +338,6 @@ wheels = [
 ]
 
 [[package]]
-name = "grader-client"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "anywidget" },
-    { name = "traitlets" },
-]
-
-[package.optional-dependencies]
-mograder = [
-    { name = "mograder" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "anywidget", specifier = ">=0.9" },
-    { name = "mograder", marker = "extra == 'mograder'", specifier = ">=0.3" },
-    { name = "traitlets" },
-]
-provides-extras = ["mograder"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -619,6 +585,40 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a8/5f/fd4eccb17ce16b988dfccfb4afa5e85f356be61408059a491ca572d51b9d/marimo-0.24.1.tar.gz", hash = "sha256:27fcac5d477ea6e6e602b191a2913808028fb3835740ee6891c1725c22cea6a8", size = 38783633, upload-time = "2026-09-10T21:50:02.675Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/13/8d/56da4f3ee073980bdae729706d54ad7edd8896e9ab0a6234c0f5ee600005/marimo-0.24.1-py3-none-any.whl", hash = "sha256:590c5e4ca5026c0507f7a3613f8272c0cd0ba1b815481f5dcbe463c8b4e4ab03", size = 39250997, upload-time = "2026-09-10T21:49:59.516Z" },
+]
+
+[[package]]
+name = "marimo-grader-client"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "anywidget" },
+    { name = "traitlets" },
+]
+
+[package.optional-dependencies]
+mograder = [
+    { name = "mograder" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anywidget", specifier = ">=0.9" },
+    { name = "mograder", marker = "extra == 'mograder'", specifier = ">=0.3" },
+    { name = "traitlets" },
+]
+provides-extras = ["mograder"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff" },
 ]
 
 [[package]]

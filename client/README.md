@@ -1,4 +1,4 @@
-# grader-client
+# marimo-grader-client
 
 Notebook-side client for the dartbrains grader. It gives a marimo notebook three
 small widgets - **sign in**, **submit** and **feedback** - backed by the
@@ -9,8 +9,8 @@ JavaScript. The kernel never sees the bearer token; it only reads the notebook
 file, collects check results and hands the payload to the widget.
 
 ```
-pip install grader-client            # core: anywidget + traitlets
-pip install "grader-client[mograder]" # also use MoGrader's check()/sidecar
+pip install marimo-grader-client            # core: anywidget + traitlets
+pip install "marimo-grader-client[mograder]" # also use MoGrader's check()/sidecar
 ```
 
 ## What an assignment looks like
@@ -24,7 +24,7 @@ import marimo
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo", "grader-client"]
+# dependencies = ["marimo", "marimo-grader-client"]
 # mograder-assignment = "week03-glm"
 # mograder-cell-hashes = "8f3a...,1c9e..."
 # grader-assignment-version = "1f0e5c2a-...-..."
@@ -55,7 +55,7 @@ Anything missing from the metadata falls back to the environment variables
 ```python
 @app.cell
 def _():
-    from grader_client import Grader
+    from marimo_grader_client import Grader
     grader = Grader()          # reads the metadata above
     grader.signin_button()     # "Sign in with Dartmouth" - once per notebook
     return (grader,)
@@ -114,8 +114,8 @@ readable notebook file (for example WASM): `read_notebook_source()` returns
 ## Python API
 
 ```python
-from grader_client import Grader, GraderWidget, check, __version__
-from grader_client.notebook import (
+from marimo_grader_client import Grader, GraderWidget, check, __version__
+from marimo_grader_client.notebook import (
     read_notebook_source, read_assignment_metadata,
     collect_check_results, build_payload,
 )

@@ -455,7 +455,7 @@ erDiagram
 <h2 id="client"><span class="num">§14</span>Client library and dartbrains-tools</h2>
 <p>Keep the generic client in its own small package so any course can use it; dartbrains-tools depends on it and supplies defaults. Working names below are placeholders.</p>
 <pre><code># generic client (works in local marimo, MoLab, WASM)
-from grader_client import Grader
+from marimo_grader_client import Grader
 g = Grader(server="https://grader.dartbrains.org")   # reads assignment_version from the notebook's PEP 723 block
 g.signin_button()          # anywidget: "Sign in with Dartmouth" → device handshake in JS
 g.check("glm-q03", [...])  # wraps mograder.check; logs a check event if signed in
