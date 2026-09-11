@@ -28,6 +28,33 @@
   let busy = $state(false);
   let applied = $state<RosterApplied | null>(null);
 
+  // Teaching staff (TAs and co-instructors) are added by NetID; they sign in with SSO like everyone else.
+  let staffNetid = $state('');
+  let staffRole = $state<'ta' | 'instructor'>('ta');
+  let staffSections = $state('');
+  let staffName = $state('');
+  let staffMessage = $state<string | null>(null);
+
+  async function addStaff(e: SubmitEvent) {
+    e.preventDefault();
+    staffMessage = null;
+    error = null;
+    try {
+      const sections = staffSections.split(',').map((x) => x.trim()).filter(Boolean);
+      const r = await api.roster.addStaff(offeringId, {
+        netid: staffNetid.trim().toLowerCase(),
+        role: staffRole,
+        ta_sections: sections,
+        display_name: staffName.trim() || undefined,
+      });
+      staffMessage = `${r.netid} added as ${r.role}${sections.length ? ` for sections ${sections.join(', ')}` : ''}.`;
+      staffNetid = ''; staffSections = ''; staffName = '';
+      await loadRoster();
+    } catch (err) {
+      error = errorMessage(err);
+    }
+  }
+
   type Bucket = keyof RosterPreview;
   const buckets: { key: Bucket; label: string; hint: string }[] = [
     { key: 'adds', label: 'Adds', hint: 'in the file, not yet enrolled' },
@@ -194,6 +221,22 @@
     </div>
   </section>
 {/if}
+
+<section class="block">
+  <div class="block-head"><h2>Teaching staff</h2><span class="muted small">Add a TA or co-instructor by NetID</span></div>
+  <form class="card import" onsubmit={addStaff}>
+    <div class="row">
+      <label class="field" style="margin:0;min-width:160px"><span>NetID</span><input id="staff-netid" type="text" bind:value={staffNetid} required placeholder="f00abc1" /></label>
+      <label class="field" style="margin:0"><span>Role</span>
+        <select id="staff-role" bind:value={staffRole}><option value="ta">TA</option><option value="instructor">Instructor</option></select>
+      </label>
+      <label class="field" style="margin:0;min-width:200px"><span>Sections (TA only, comma-separated; blank = all)</span><input id="staff-sections" type="text" bind:value={staffSections} placeholder="01, 02" disabled={staffRole !== 'ta'} /></label>
+      <label class="field" style="margin:0;min-width:160px"><span>Display name (optional)</span><input id="staff-name" type="text" bind:value={staffName} /></label>
+      <button class="primary" type="submit" disabled={!staffNetid.trim()}>Add</button>
+    </div>
+    {#if staffMessage}<p class="small muted" style="margin:0.5rem 0 0">{staffMessage}</p>{/if}
+  </form>
+</section>
 
 <section class="block">
   <div class="block-head"><h2>Current roster <span class="count">{roster?.length ?? 0}</span></h2></div>

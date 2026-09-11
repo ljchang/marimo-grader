@@ -74,6 +74,18 @@ Publishing (`POST .../versions`) is finalized server-side: the server injects `g
 - `POST /offerings/{offering_id}/roster/apply` body = the preview payload (possibly edited) → applied counts (audited).
 - `GET /offerings/{offering_id}/roster` → enrollments.
 
+- `POST /offerings/{offering_id}/roster/staff` (instructor) `{netid, role: ta|instructor, ta_sections: [...], display_name?}` → adds or updates a teaching-staff enrollment (audited). Students come from roster import, never from this route.
+
+## Audit
+
+- `GET /offerings/{offering_id}/audit?limit=` (instructor) → every audited action in the offering, newest first: `[{id, at, actor (netid), entity, entity_id, action, before, after, reason}]`. Includes grade changes.
+- `GET /admin/audit?limit=` (platform admin) → platform-level entries only (course, offering, user, enrollment, assignment, assignment_version, roster, export) with an `offering` alias; grade rows are excluded because admins do not see student work.
+
+## Operator commands (server shell)
+
+- `grader token <netid> [--offering course/term --role instructor --admin]` → notebook/CLI token, works in any auth mode.
+- `grader login-link <netid>` → one-time browser sign-in URL (10 min) exchanged at `GET /auth/exchange?code=`.
+
 ## Export
 
 - `GET /offerings/{offering_id}/export/canvas?assignment_ids=a,b` with an uploaded Canvas gradebook on file → CSV.

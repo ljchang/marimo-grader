@@ -322,6 +322,26 @@ export interface RosterApplied {
   [key: string]: unknown;
 }
 
+export interface AuditEntry {
+  id: string;
+  at: string;
+  actor: string | null;
+  offering?: string | null;
+  entity: string;
+  entity_id: string;
+  action: string;
+  before: Record<string, any> | null;
+  after: Record<string, any> | null;
+  reason: string | null;
+}
+
+export interface StaffAdd {
+  netid: string;
+  role: 'ta' | 'instructor';
+  ta_sections?: string[];
+  display_name?: string;
+}
+
 export interface RosterEnrollment extends RosterRow {
   role: Role;
   active?: boolean;
@@ -683,6 +703,9 @@ export const api = {
         body,
       });
     },
+    audit(offeringId: string, signal?: AbortSignal): Promise<AuditEntry[]> {
+      return request<AuditEntry[]>(`/offerings/${enc(offeringId)}/audit`, { signal });
+    },
     student(offeringId: string, netid: string, signal?: AbortSignal): Promise<StudentHistory> {
       return request<StudentHistory>(
         `/offerings/${enc(offeringId)}/students/${enc(netid)}`,
@@ -710,6 +733,9 @@ export const api = {
     list(offeringId: string, signal?: AbortSignal): Promise<RosterEnrollment[]> {
       return request<RosterEnrollment[]>(`/offerings/${enc(offeringId)}/roster`, { signal });
     },
+    addStaff(offeringId: string, body: StaffAdd): Promise<{ netid: string; role: string }> {
+      return request(`/offerings/${enc(offeringId)}/roster/staff`, { method: 'POST', body });
+    },
   },
 
   exports: {
@@ -724,6 +750,9 @@ export const api = {
   admin: {
     courses(signal?: AbortSignal): Promise<Course[]> {
       return request<Course[]>('/admin/courses', { signal });
+    },
+    audit(signal?: AbortSignal): Promise<AuditEntry[]> {
+      return request<AuditEntry[]>('/admin/audit', { signal });
     },
     createCourse(body: CourseCreate): Promise<Course> {
       return request<Course>('/admin/courses', { method: 'POST', body });

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api, errorMessage, type Course } from '$lib/api';
   import Notice from '$lib/components/Notice.svelte';
+  import Audit from './Audit.svelte';
   import Loading from '$lib/components/Loading.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -172,3 +173,9 @@
     <button class="primary" type="submit" disabled={busy || !instructorOffering}>Add instructor</button>
   </form>
 </div>
+<section class="block">
+  <div class="block-head"><h2>Platform audit log</h2><span class="muted small">Courses, offerings, staff, publishes, roster imports, exports. Grade changes are only visible to each offering's instructors.</span></div>
+  <Audit scope="platform" />
+</section>
+
+

@@ -144,3 +144,32 @@ def test_canvas_export_roundtrip(client, seed):
     lines = r.text.strip().splitlines()
     assert lines[0].endswith("GLM")
     assert lines[2].endswith(",4.5") and lines[3].endswith(",")
+
+
+def test_audit_logs_for_instructor_and_admin(client, seed):
+    token = notebook_token(client, "f00abc1")
+    sub = _submit(client, token, seed, "glm-q05")
+    csrf = login(client, "prof")
+    client.post(
+        f"/api/v1/submissions/{sub['id']}/score",
+        json={"manual_points": 3, "reason": "partial"},
+        headers={"X-CSRF-Token": csrf},
+    )
+    log = client.get(f"/api/v1/offerings/{seed.offering_id}/audit").json()
+    assert (
+        log[0]["entity"] == "score" and log[0]["actor"] == "prof" and log[0]["reason"] == "partial"
+    )
+    # TA and student cannot read the offering audit
+    client.cookies.clear()
+    login(client, "ta1")
+    assert client.get(f"/api/v1/offerings/{seed.offering_id}/audit").status_code == 403
+    # platform admin sees platform events but never grade rows
+    client.cookies.clear()
+    csrf = login(client, "admin")
+    client.post(
+        "/api/v1/admin/courses",
+        json={"slug": "stats", "title": "Stats"},
+        headers={"X-CSRF-Token": csrf},
+    )
+    plat = client.get("/api/v1/admin/audit").json()
+    assert plat[0]["entity"] == "course" and all(e["entity"] != "score" for e in plat)

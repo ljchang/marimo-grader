@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from grader.auth.deps import api_error, require_platform_admin
 from grader.db import get_db
-from grader.models import Course, Enrollment, EnrollmentStatus, Offering, Role, User
+from grader.models import Course, Enrollment, EnrollmentStatus, GradeAudit, Offering, Role, User
 from grader.services import audit
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_platform_admin)])
@@ -170,3 +170,43 @@ def set_admin(
         after={"platform_admin": body.platform_admin},
     )
     return {"netid": netid, "platform_admin": user.platform_admin}
+
+
+PLATFORM_ENTITIES = (
+    "course",
+    "offering",
+    "user",
+    "enrollment",
+    "assignment",
+    "assignment_version",
+    "roster",
+    "export",
+)
+
+
+@router.get("/audit")
+def platform_audit(limit: int = 200, db: Session = Depends(get_db)):
+    """Platform-level audit: courses, offerings, staff changes, publishes, roster imports,
+    exports. Grade changes are deliberately excluded here (admins do not see student work);
+    instructors see them in their offering's audit log."""
+    from grader.api.grading import audit_json
+
+    rows = db.scalars(
+        select(GradeAudit)
+        .where(GradeAudit.entity.in_(PLATFORM_ENTITIES))
+        .order_by(GradeAudit.at.desc())
+        .limit(min(limit, 1000))
+    ).all()
+    users = {
+        u.id: u.netid
+        for u in db.scalars(
+            select(User).where(User.id.in_({r.actor_user_id for r in rows if r.actor_user_id}))
+        )
+    }
+    offerings = {o.id: f"{o.course.slug}/{o.term}" for o in db.scalars(select(Offering))}
+    out = audit_json(rows, users)
+    for item, r in zip(out, rows, strict=True):
+        item["offering"] = offerings.get(r.offering_id)
+        if r.entity == "enrollment" and r.after and "netid" not in r.after:
+            item["after"] = {k: v for k, v in r.after.items() if k != "before"}
+    return out

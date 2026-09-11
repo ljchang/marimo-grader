@@ -30,6 +30,7 @@ from grader.models import (
     CheckEvent,
     Enrollment,
     EnrollmentStatus,
+    GradeAudit,
     GradingMode,
     Question,
     QuestionGrade,
@@ -507,3 +508,42 @@ def export_canvas(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="canvas-grades.csv"'},
     )
+
+
+def audit_json(rows, users: dict) -> list[dict]:
+    return [
+        {
+            "id": str(r.id),
+            "at": iso(r.at),
+            "actor": users.get(r.actor_user_id),
+            "entity": r.entity,
+            "entity_id": r.entity_id,
+            "action": r.action,
+            "before": r.before,
+            "after": r.after,
+            "reason": r.reason,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/offerings/{offering_id}/audit")
+def offering_audit(
+    limit: int = 200,
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    """Every audited action in this offering: grades, roster, settings, publishes, exports."""
+    rows = db.scalars(
+        select(GradeAudit)
+        .where(GradeAudit.offering_id == m.offering.id)
+        .order_by(GradeAudit.at.desc())
+        .limit(min(limit, 1000))
+    ).all()
+    users = {
+        u.id: u.netid
+        for u in db.scalars(
+            select(User).where(User.id.in_({r.actor_user_id for r in rows if r.actor_user_id}))
+        )
+    }
+    return audit_json(rows, users)
