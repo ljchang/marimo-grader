@@ -33,7 +33,7 @@ course website / MoLab / cluster  students open the assignment
 student's browser  ---  sign-in handshake and submit, from the notebook widget
 ```
 
-Every submission stores the whole notebook as an immutable attempt against the exact assignment version the student opened. A worker autogrades it with [MoGrader](https://github.com/jameskermode/mograder)'s engine inside a network-less sandbox and renders it to HTML for the grading view. Written answers wait in a queue for a person.
+Every submission stores the whole notebook as an immutable attempt against the exact assignment version the student opened. A worker autogrades it with the engine from [MoGrader](https://github.com/jameskermode/mograder), James Kermode's open-source autograder for marimo notebooks, inside a network-less sandbox and renders it to HTML for the grading view. Written answers wait in a queue for a person.
 
 ## Where to start
 
@@ -47,3 +47,5 @@ The code is at [github.com/ljchang/marimo-grader](https://github.com/ljchang/mar
 ## Related
 
 This site and the [DartBrains](https://dartbrains.org) course book are built with [marimo-book](https://marimobook.org), a static-site generator for marimo notebooks ([source](https://github.com/ljchang/marimo-book)). A book publishes the student version of an assignment as an ordinary page and links it here; see marimo-book's [Assignments and grading](https://marimobook.org/assignments-and-grading/) page.
+
+marimo-grader builds on [MoGrader](https://github.com/jameskermode/mograder) (James Kermode, University of Warwick, MIT license) for authoring conventions, checks, integrity, and sandboxed execution; see [Built on MoGrader](reference/mograder.md) for what is used and what to know.

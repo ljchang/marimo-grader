@@ -61,3 +61,4 @@ toc:
       - file: content/reference/notebook-metadata.md
       - file: content/reference/api.md
       - file: content/reference/design.md
+      - file: content/reference/mograder.md

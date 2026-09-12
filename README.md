@@ -131,4 +131,15 @@ Canvas gradebook export, the Svelte UI, and the notebook widget. Open spikes fro
 document (§15) still apply, most importantly a live test against the Dartmouth IdP and the
 device handshake from a MoLab notebook.
 
+## Acknowledgements
+
+The grading engine is [MoGrader](https://github.com/jameskermode/mograder) by James Kermode
+(University of Warwick, MIT license): its authoring markers, `check()` runtime, cell-hash
+integrity check, hidden-test reinjection, and sandboxed runner do the actual autograding here.
+marimo-grader uses it as a library and contributes fixes upstream rather than forking it.
+See [Built on MoGrader](https://marimograder.org/reference/mograder/) for what is used and the
+behaviors worth knowing. The documentation and the DartBrains course book are built with
+[marimo-book](https://marimobook.org), and the whole system exists because of
+[marimo](https://marimo.io).
+
 MIT.

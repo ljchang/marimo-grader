@@ -19,7 +19,7 @@ Edit with `uv run marimo edit --sandbox assignments/glm.py`.
 
 ## The notebook, cell by cell
 
-The conventions come from [MoGrader](https://github.com/jameskermode/mograder), which the grader uses for stripping solutions and running checks.
+The conventions come from [MoGrader](https://github.com/jameskermode/mograder), James Kermode's autograder for marimo notebooks, which the grader uses for stripping solutions, restoring hidden tests, and running checks. Its [documentation](https://github.com/jameskermode/mograder#readme) covers the markers in more depth; [Built on MoGrader](../reference/mograder.md) lists the behaviors that matter here.
 
 **Dependencies.** The PEP 723 block at the top is the environment contract: the same list builds the environment in MoLab, in the browser, on a cluster, on a laptop, and in the grader's sandbox. List everything the notebook imports, plus the two grading packages.
 
