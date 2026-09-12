@@ -10,15 +10,13 @@
 # Caddy redirects http:// to https:// and manages certificates automatically.
 
 {$GRADER_HOST:grader.dartbrains.org} {
-	# Security headers on every response. The CSP allows the SAML form POST
-	# back from the Dartmouth IdP (login/logout.dartmouth.edu); everything else
-	# is same-origin. Keep in sync with the design document (§13).
+	# Transport headers on every response. Page-level policy (CSP, framing) is set
+	# on the single-page app below; API responses set their own (the worker-rendered
+	# notebook is served by the API with a strict CSP and is embedded by the app in
+	# a sandboxed iframe, so it must not carry frame-ancestors 'none').
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
-		Referrer-Policy strict-origin-when-cross-origin
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; form-action 'self' https://login.dartmouth.edu https://logout.dartmouth.edu; frame-ancestors 'none'; base-uri 'self'"
 		-Server
 	}
 
@@ -41,8 +39,15 @@
 		}
 	}
 
-	# Everything else is the single-page app.
+	# Everything else is the single-page app. The CSP allows the SAML form POST back
+	# from the Dartmouth IdP (login/logout.dartmouth.edu); everything else is
+	# same-origin. Keep in sync with the design document (§13).
 	handle {
+		header {
+			X-Frame-Options DENY
+			Referrer-Policy strict-origin-when-cross-origin
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; form-action 'self' https://login.dartmouth.edu https://logout.dartmouth.edu; frame-ancestors 'none'; base-uri 'self'"
+		}
 		root * /srv
 		encode zstd gzip
 		try_files {path} /index.html
