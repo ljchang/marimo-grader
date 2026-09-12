@@ -46,7 +46,7 @@ If your course site shows the student notebook (DartBrains commits the file into
 
 Settings live on the grader, not in the notebook, so they change without republishing. Edit them on the Assignments page or through the API:
 
-![The assignments page: each published assignment with its version, questions, and settings](../images/assignments.png)
+![The assignments page: each published assignment with its version, questions, and settings](../../images/assignments.png)
 
 | Setting | Meaning | Default |
 |---|---|---|

@@ -38,7 +38,7 @@ Instructors sometimes republish an assignment mid-term to fix a typo or a test. 
 
 Feedback appears in the notebook right after grading, and it also stays on the grader's website even after your MoLab session is gone. Open the grader and sign in to see every assignment, every attempt, its score, and the instructor's comments.
 
-![Your work: every assignment with its status, grade so far, and attempts, with a link to feedback](../images/student-view.png)
+![Your work: every assignment with its status, grade so far, and attempts, with a link to feedback](../../images/student-view.png)
 
 ## If something goes wrong
 

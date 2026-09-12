@@ -55,4 +55,4 @@ Run staging and production as separate hosts with separate databases. Set `GRADE
 
 Sign in with an operator link (see [Single sign-on](../operators/single-sign-on.md)), switch to Admin mode, and create the first course and offering. Everything on this page is platform-level; no student data appears here.
 
-![The admin page: courses with their offerings and instructors, and forms to add each](../images/admin-courses.png)
+![The admin page: courses with their offerings and instructors, and forms to add each](../../images/admin-courses.png)
