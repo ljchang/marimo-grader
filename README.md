@@ -1,5 +1,7 @@
 # marimo-grader
 
+**Documentation:** https://ljchang.github.io/marimo-grader/ (students, instructors, operators, reference).
+
 A multi-tenant, FERPA-appropriate grading service for [marimo](https://marimo.io) assignments.
 Students open a notebook (MoLab, WASM, or a local kernel), sign in with Dartmouth SSO from
 inside the notebook, and click **Submit**. Instructors and TAs grade in a web app. Grades export
