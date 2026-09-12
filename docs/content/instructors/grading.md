@@ -6,6 +6,10 @@ For instructors and TAs. Where to look, what to grade, and how scores become gra
 
 The course page answers one question first: who needs my attention? A list at the top shows only the items that need a person:
 
+![The course page: a Needs attention list above the class progress grid, one column per question](../images/course-page.png)
+
+The screenshot shows a course with one assignment open and nothing waiting: the attention list collapses to a single line and the grid carries the detail.
+
 - submissions waiting for a grade, per question, with a **Grade now** button;
 - students with no activity for a week while an assignment is open;
 - checks that more than a third of the class has been failing in the last two days;
@@ -18,6 +22,10 @@ Below it, **Class progress** is a grid of students by question for the selected 
 ## The grading queue
 
 Each hand-graded or hybrid question has a queue: one entry per student, showing their latest attempt, ungraded ones first and oldest first.
+
+![The grading queue: the rendered notebook on the left, score, feedback, and the student's written answer on the right](../images/grading-queue.png)
+
+The rendered notebook fills the left pane; the right pane holds the score, the feedback box, and any written answers the student submitted.
 
 The left pane is the student's notebook, rendered by the grader after execution, with the outputs they saw. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 

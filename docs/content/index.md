@@ -43,3 +43,7 @@ Every submission stores the whole notebook as an immutable attempt against the e
 - **Reference**: the [command line](reference/cli.md), [configuration](reference/configuration.md), [notebook metadata](reference/notebook-metadata.md), the [HTTP API](reference/api.md), and the [design document](reference/design.md).
 
 The code is at [github.com/ljchang/marimo-grader](https://github.com/ljchang/marimo-grader), MIT licensed. The first course using it is [DartBrains](https://dartbrains.org) at Dartmouth.
+
+## Related
+
+This site and the [DartBrains](https://dartbrains.org) course book are built with [marimo-book](https://marimobook.org), a static-site generator for marimo notebooks ([source](https://github.com/ljchang/marimo-book)). A book publishes the student version of an assignment as an ordinary page and links it here; see marimo-book's [Assignments and grading](https://marimobook.org/assignments-and-grading/) page.

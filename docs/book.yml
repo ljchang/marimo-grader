@@ -1,5 +1,5 @@
 # Documentation site for marimo-grader, built with marimo-book.
-# Published at https://ljchang.github.io/marimo-grader/ by .github/workflows/docs.yml.
+# Published at https://marimograder.org/ by .github/workflows/docs.yml (GitHub Pages, custom domain via CNAME).
 
 title: marimo-grader
 description: Sign in, submit, and grade marimo notebook assignments from the browser, MoLab, a cluster, or a laptop.
@@ -10,17 +10,16 @@ copyright: "2026"
 license: MIT
 repo: https://github.com/ljchang/marimo-grader
 branch: main
-# Served under a repository subpath on GitHub Pages; marimo-book passes this to the
-# site shell as site_url so links and assets resolve under /marimo-grader/.
-url: https://ljchang.github.io/marimo-grader/
+url: https://marimograder.org/
 
+# Same palette and type as marimobook.org so the two projects read as a family.
 theme:
   palette:
-    primary: "#00693E"   # Dartmouth green, the same accent as the grader UI
-    accent:  "#A5D75F"
+    primary: "#6366f1"   # indigo 500
+    accent:  "#818cf8"   # indigo 400
   font:
-    text: Source Sans 3
-    code: JetBrains Mono
+    text: Geist
+    code: Geist Mono
 
 # These are Markdown pages; there is nothing to launch.
 launch_buttons:

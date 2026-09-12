@@ -11,6 +11,8 @@ Students are never typed in by hand. The roster page imports a file, shows you e
 3. Review the four lists: students to add, students to drop, section moves, and rows that could not be matched. Untick anything you do not want applied.
 4. Press **Apply**.
 
+![The roster page: import from Canvas or Banner, add teaching staff, and the current roster](../images/roster.png)
+
 Matching uses the SIS Login ID, which is the NetID at Dartmouth. The upload is also kept as the template for [Canvas export](canvas-export.md), so the first import doubles as setup for grade export.
 
 ## Import from Banner

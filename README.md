@@ -1,6 +1,10 @@
 # marimo-grader
 
-**Documentation:** https://ljchang.github.io/marimo-grader/ (students, instructors, operators, reference).
+**Documentation:** https://marimograder.org/ (students, instructors, operators, reference).
+
+The documentation and the [DartBrains](https://dartbrains.org) course book are built with
+[marimo-book](https://marimobook.org) ([source](https://github.com/ljchang/marimo-book)), which
+publishes student notebooks as course pages that link back to the grader.
 
 A multi-tenant, FERPA-appropriate grading service for [marimo](https://marimo.io) assignments.
 Students open a notebook (MoLab, WASM, or a local kernel), sign in with Dartmouth SSO from

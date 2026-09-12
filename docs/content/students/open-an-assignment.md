@@ -38,6 +38,8 @@ The `--sandbox` flag reads the dependency list inside the notebook and builds an
 
 Whichever way you opened it, the notebook has the same shape:
 
+![An assignment page on the course website, with the launch buttons in the header and the sign-in control at the top of the notebook](../images/dartbrains-assignment-page.png)
+
 - An introduction and a **Sign in** button near the top.
 - One section per question. Each has a place for your work, a **Check** cell that runs instantly, and a **Submit** button.
 - Written questions have a text box instead of code.

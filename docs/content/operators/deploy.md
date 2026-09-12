@@ -50,3 +50,9 @@ Environments for notebooks are built outside the sandbox, one per distinct depen
 ## Staging and production
 
 Run staging and production as separate hosts with separate databases. Set `GRADER_STAGING=1` on staging so search engines ignore it and the header is marked. Student notebooks embed the server they were published from, so a notebook published on staging always submits to staging.
+
+## After the first deploy
+
+Sign in with an operator link (see [Single sign-on](../operators/single-sign-on.md)), switch to Admin mode, and create the first course and offering. Everything on this page is platform-level; no student data appears here.
+
+![The admin page: courses with their offerings and instructors, and forms to add each](../images/admin-courses.png)
