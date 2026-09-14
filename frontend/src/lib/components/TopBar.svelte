@@ -1,10 +1,34 @@
 <script lang="ts">
   import { auth } from '$lib/auth.svelte';
+  import { api } from '$lib/api';
   import { router } from '$lib/router.svelte';
   import { uiMode } from '$lib/mode.svelte';
   import type { Enrollment } from '$lib/api';
 
   let { offering = null }: { offering?: Enrollment | null } = $props();
+
+  // Preferred name lives here rather than in a Settings tab: it is yours and
+  // follows you across every course, unlike the per-offering settings.
+  let editingName = $state(false);
+  let nameDraft = $state('');
+  let savingName = $state(false);
+
+  function openNameEditor() {
+    nameDraft = auth.me?.display_name ?? '';
+    editingName = true;
+  }
+
+  async function saveName(e: SubmitEvent) {
+    e.preventDefault();
+    savingName = true;
+    try {
+      await api.auth.setPreferredName(nameDraft.trim() || null);
+      await auth.load();
+      editingName = false;
+    } finally {
+      savingName = false;
+    }
+  }
 
   const staff = $derived(offering ? auth.isStaff(offering.offering_id) : false);
   const instructor = $derived(offering ? auth.isInstructor(offering.offering_id) : false);
@@ -62,13 +86,26 @@
         </div>
       {/if}
       {#if auth.signedIn && auth.me}
-        <span class="netid" title={auth.me.display_name}>{auth.me.netid}</span>
+        <button class="quiet netid" onclick={openNameEditor} title="Change the name you are called">
+          {auth.me.display_name || auth.me.netid}
+        </button>
         <button class="quiet" onclick={() => auth.signOut()}>Sign out</button>
       {:else if auth.status === 'anonymous'}
         <button class="quiet" onclick={() => auth.signIn()}>Sign in</button>
       {/if}
     </div>
   </div>
+{#if editingName}
+  <div class="namebar">
+    <form onsubmit={saveName}>
+      <label for="preferred-name">What would you like to be called?</label>
+      <input id="preferred-name" type="text" bind:value={nameDraft} maxlength="200" placeholder={auth.me?.netid} />
+      <button class="primary" type="submit" disabled={savingName}>{savingName ? 'Saving…' : 'Save'}</button>
+      <button class="quiet" type="button" onclick={() => (editingName = false)}>Cancel</button>
+    </form>
+    <p class="hint">Shown to your instructor and TAs instead of the name Dartmouth has on file. Leave it empty to go back to that name.</p>
+  </div>
+{/if}
 </header>
 
 <style>
@@ -141,6 +178,24 @@
     gap: 12px;
     font-size: 13px;
     white-space: nowrap;
+  }
+  .namebar {
+    border-top: 1px solid var(--line, #e3e6e4);
+    padding: 10px 16px;
+  }
+  .namebar form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .namebar input {
+    min-width: 220px;
+  }
+  .namebar .hint {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.85em;
   }
   .netid {
     font-family: var(--mono);

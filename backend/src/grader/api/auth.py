@@ -133,7 +133,7 @@ def me(p: Principal = Depends(current_principal), db: Session = Depends(get_db))
     ).all()
     return {
         "netid": user.netid,
-        "display_name": user.display_name,
+        "display_name": user.name,
         "platform_admin": user.platform_admin,
         "via": p.via,
         "enrollments": [
@@ -147,6 +147,31 @@ def me(p: Principal = Depends(current_principal), db: Session = Depends(get_db))
             for e in enrollments
         ],
     }
+
+
+class ProfileIn(BaseModel):
+    preferred_name: str | None = None
+
+
+@router.patch("/me")
+def update_me(
+    body: ProfileIn, p: Principal = Depends(current_principal), db: Session = Depends(get_db)
+):
+    """Set the name you want to be called.
+
+    Only ever edits the caller's own row -- there is no netid parameter, so this
+    cannot be pointed at anyone else. It writes preferred_name and never
+    display_name, which belongs to the IdP and is overwritten at every login;
+    a name typed here would otherwise vanish the next time you signed in.
+
+    Sending null or blank clears it and falls back to the IdP's name.
+    """
+    name = (body.preferred_name or "").strip()
+    if len(name) > 200:
+        raise api_error(422, "too_long", "preferred name must be 200 characters or fewer")
+    p.user.preferred_name = name or None
+    db.flush()
+    return {"netid": p.user.netid, "preferred_name": p.user.preferred_name, "name": p.user.name}
 
 
 @router.get("/csrf")
@@ -300,7 +325,7 @@ def email_login(body: EmailLoginRequest, db: Session = Depends(get_db)):
         link += "&next=" + quote(target, safe="")
 
     fields = {
-        "name": f" {user.display_name}" if user.display_name else "",
+        "name": f" {user.name}" if user.name else "",
         "site": urlparse(s.frontend_url).hostname or "DartBrains",
         "link": link,
         "days": max(1, s.email_login_ttl_seconds // 86400),

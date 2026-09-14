@@ -46,6 +46,7 @@ export interface Enrollment {
 
 export interface Me {
   netid: string;
+  /** What to show: the person's preferred name if they set one, else the IdP's. */
   display_name: string;
   platform_admin: boolean;
   enrollments: Enrollment[];
@@ -603,6 +604,16 @@ export const api = {
     },
     csrf(): Promise<string> {
       return getCsrf(true);
+    },
+    /**
+     * Set the name you want to be called. Only ever edits your own row, and
+     * writes preferred_name rather than the IdP's display_name, which SAML
+     * overwrites at every login. Empty clears it.
+     */
+    setPreferredName(
+      preferred_name: string | null,
+    ): Promise<{ netid: string; preferred_name: string | null; name: string | null }> {
+      return request('/auth/me', { method: 'PATCH', body: { preferred_name } });
     },
     /**
      * Clears the session cookie. The server answers with a 302 (to the campus

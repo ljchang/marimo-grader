@@ -29,7 +29,7 @@ def list_roster(m: Membership = Depends(require_staff), db: Session = Depends(ge
     return [
         {
             "netid": e.user.netid,
-            "display_name": e.user.display_name,
+            "display_name": e.user.name,
             "role": e.role.value,
             "status": e.status.value,
             "section": e.section.name if e.section else None,
