@@ -103,7 +103,7 @@ def triage(m: Membership = Depends(require_staff), db: Session = Depends(get_db)
             inactive.append(
                 {
                     "netid": e.user.netid,
-                    "display_name": e.user.display_name,
+                    "display_name": e.user.name,
                     "last_activity": iso(last_any),
                 }
             )
@@ -224,7 +224,7 @@ def grid(
         out.append(
             {
                 "netid": e.user.netid,
-                "display_name": e.user.display_name,
+                "display_name": e.user.name,
                 "section": e.section.name if e.section else None,
                 "last_activity": iso(last),
                 "cells": cells,
@@ -260,7 +260,7 @@ def queue(
             continue
         s = subs[-1]
         j = submission_json(db, s)
-        j["display_name"] = e.user.display_name
+        j["display_name"] = e.user.name
         j["needs_grading"] = _needs_manual(db, s)
         items.append(j)
     items.sort(key=lambda j: (not j["needs_grading"], j["submitted_at"]))
@@ -377,7 +377,7 @@ def student_history(
     grades = db.scalars(select(QuestionGrade).where(QuestionGrade.enrollment_id == e.id)).all()
     return {
         "netid": e.user.netid,
-        "display_name": e.user.display_name,
+        "display_name": e.user.name,
         "section": e.section.name if e.section else None,
         "status": e.status.value,
         "submissions": [submission_json(db, s) for s in subs],

@@ -93,12 +93,21 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_id)
     netid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # display_name is the IdP's and is overwritten from the SAML assertion on every
+    # login. preferred_name belongs to the person and is never touched by login, so
+    # a student can be called what they want to be called. Render `name`, not either.
     display_name: Mapped[str | None] = mapped_column(String(200))
+    preferred_name: Mapped[str | None] = mapped_column(String(200))
     platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     enrollments: Mapped[list[Enrollment]] = relationship(back_populates="user")
+
+    @property
+    def name(self) -> str | None:
+        """What to show a human: their own choice, else the IdP's, else nothing."""
+        return self.preferred_name or self.display_name
 
 
 class Course(Base):
