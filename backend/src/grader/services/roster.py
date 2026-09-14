@@ -193,6 +193,11 @@ def preview(db: Session, offering: Offering, rows: list[RosterRow]) -> dict:
     return {"adds": adds, "drops": drops, "moves": moves, "unmatched": unmatched}
 
 
+def section_for(db: Session, offering: Offering, name: str | None) -> Section | None:
+    """Resolve a section by name, creating it on first use. ``None`` for no section."""
+    return _section(db, offering, name)
+
+
 def _section(db: Session, offering: Offering, name: str | None) -> Section | None:
     if not name:
         return None

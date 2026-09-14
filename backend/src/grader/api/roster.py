@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from grader.auth.deps import Membership, api_error, require_instructor, require_staff
 from grader.db import get_db
-from grader.models import Enrollment, Role, RosterUpload, User
+from grader.models import Enrollment, EnrollmentStatus, Role, RosterUpload, User
 from grader.services import audit, roster
 from grader.services.artifacts import store
 
@@ -144,3 +144,104 @@ def add_staff(
         after={"netid": netid, "role": e.role.value, "ta_sections": e.ta_sections},
     )
     return {"netid": netid, "role": e.role.value, "ta_sections": e.ta_sections}
+
+
+class StudentIn(BaseModel):
+    netid: str
+    display_name: str | None = None
+    section: str | None = None
+
+
+@router.post("/offerings/{offering_id}/roster/students", status_code=201)
+def add_student(
+    body: StudentIn, m: Membership = Depends(require_instructor), db: Session = Depends(get_db)
+):
+    """Add or reinstate one student without a CSV round-trip.
+
+    Import stays the bulk path and the source of truth; this is for the
+    late add and the person Canvas has not caught up with yet.
+    """
+    netid = body.netid.strip().lower()
+    if not netid:
+        raise api_error(422, "bad_netid", "a NetID is required")
+    user = db.scalar(select(User).where(User.netid == netid))
+    if user is None:
+        user = User(netid=netid, display_name=body.display_name)
+        db.add(user)
+        db.flush()
+    e = db.scalar(
+        select(Enrollment).where(
+            Enrollment.offering_id == m.offering.id, Enrollment.user_id == user.id
+        )
+    )
+    if e is not None and e.role != Role.student:
+        raise api_error(
+            409, "is_staff", f"{netid} is enrolled as {e.role.value}; remove them from staff first"
+        )
+    before = {"status": e.status.value} if e else None
+    section = roster.section_for(db, m.offering, body.section)
+    if e is None:
+        e = Enrollment(offering_id=m.offering.id, user_id=user.id, role=Role.student)
+        db.add(e)
+    e.status = EnrollmentStatus.active
+    e.section_id = section.id if section else None
+    db.flush()
+    audit.record(
+        db,
+        actor_id=m.user.id,
+        offering_id=m.offering.id,
+        entity="enrollment",
+        entity_id=e.id,
+        action="add_student",
+        before=before,
+        after={"netid": netid, "section": body.section},
+    )
+    return {"netid": netid, "role": e.role.value, "status": e.status.value}
+
+
+@router.delete("/offerings/{offering_id}/roster/{netid}")
+def drop_enrollment(
+    netid: str, m: Membership = Depends(require_instructor), db: Session = Depends(get_db)
+):
+    """Mark one enrollment dropped, staff included.
+
+    A soft drop, not a delete: submissions reference the enrollment, and the
+    grade record of someone who withdraws has to survive them leaving. A later
+    import (or add_student) reinstates the same row rather than making a second.
+    """
+    netid = netid.strip().lower()
+    e = db.scalar(
+        select(Enrollment)
+        .join(User)
+        .where(Enrollment.offering_id == m.offering.id, User.netid == netid)
+    )
+    if e is None:
+        raise api_error(404, "not_found", f"{netid} is not enrolled in this offering")
+    if e.user_id == m.user.id:
+        raise api_error(409, "self_drop", "you cannot remove yourself from an offering")
+    if e.role == Role.instructor:
+        others = db.scalars(
+            select(Enrollment).where(
+                Enrollment.offering_id == m.offering.id,
+                Enrollment.role == Role.instructor,
+                Enrollment.status == EnrollmentStatus.active,
+                Enrollment.id != e.id,
+            )
+        ).all()
+        if not others:
+            # Otherwise one click locks everyone out of the offering for good.
+            raise api_error(409, "last_instructor", "an offering needs at least one instructor")
+    before = {"role": e.role.value, "status": e.status.value}
+    e.status = EnrollmentStatus.dropped
+    db.flush()
+    audit.record(
+        db,
+        actor_id=m.user.id,
+        offering_id=m.offering.id,
+        entity="enrollment",
+        entity_id=e.id,
+        action="drop",
+        before=before,
+        after={"netid": netid, "status": e.status.value},
+    )
+    return {"netid": netid, "status": e.status.value}
