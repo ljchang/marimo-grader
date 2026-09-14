@@ -61,17 +61,36 @@ def _resolve(
     if v is None:
         raise api_error(404, "not_found", "assignment version not found")
     m = membership_for(db, user, v.assignment.offering_id)
-    if m is None or m.role != Role.student:
-        raise api_error(403, "not_enrolled", "you are not enrolled as a student in this offering")
-    # Resolve against the version the student actually opened, not the live question list:
-    # a question dropped in a later version must still accept submissions from older copies.
+    if m is None:
+        raise api_error(403, "not_enrolled", "you are not enrolled in this offering")
+    # Staff may submit too, so an instructor can exercise their own assignment
+    # end to end before students see it. Nothing special marks those attempts:
+    # they hang off the submitter's own (instructor or TA) enrollment, and every
+    # view that surfaces grades -- the class grid, the attention queue, the
+    # Canvas export -- already selects student enrollments only. See is_test().
+    return m.enrollment, v, q_of(db, v, qid)
+
+
+def is_test(sub: Submission) -> bool:
+    """True when a submission came from staff exercising the assignment.
+
+    Derived from the enrollment's role rather than stored on the row: there is
+    no flag to set, forget to set, or let drift out of step with the roster.
+    """
+    return sub.enrollment.role != Role.student
+
+
+def q_of(db: Session, v: AssignmentVersion, qid: str) -> Question:
+    """Resolve against the version the submitter actually opened, not the live
+    question list: a question dropped in a later version must still accept
+    submissions from older copies."""
     q = db.scalar(
         select(Question).where(Question.assignment_id == v.assignment_id, Question.qid == qid)
     )
     snapshot_qids = {x.get("qid") for x in (v.question_snapshot or [])}
     if q is None or (snapshot_qids and qid not in snapshot_qids):
         raise api_error(404, "unknown_question", f"question {qid!r} not in this assignment version")
-    return m.enrollment, v, q
+    return q
 
 
 def submission_outputs(db: Session, s: Submission) -> dict:
@@ -130,6 +149,8 @@ def created_json(sub: Submission, *, duplicate: bool = False) -> dict:
         "latest_version": latest.version,
         "stale": latest.version > version.version,
         "duplicate": duplicate,
+        # Staff attempt: graded and returned, but never recorded as a grade.
+        "test": is_test(sub),
     }
 
 

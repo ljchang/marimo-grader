@@ -33,10 +33,20 @@ def test_submit_creates_immutable_attempt_and_queues_runs(client, seed):
         assert all(r.status == RunStatus.queued for r in runs)
 
 
-def test_submit_requires_student_enrollment(client, seed):
-    token = notebook_token(client, "prof")  # instructor, not a student
-    r = _submit(client, token, seed)
+def test_submit_requires_an_enrollment(client, seed):
+    """Anyone enrolled may submit; staff attempts are flagged as tests and kept
+    out of the gradebook (tests/test_staff_submissions.py). Being enrolled in
+    nothing is still refused."""
+    from grader.models import User
+
+    with dbmod.get_sessionmaker()() as db:
+        db.add(User(netid="outsider"))
+        db.commit()
+    r = _submit(client, notebook_token(client, "outsider"), seed)
     assert r.status_code == 403 and r.json()["error"]["code"] == "not_enrolled"
+
+    r = _submit(client, notebook_token(client, "prof"), seed)  # instructor
+    assert r.status_code == 201 and r.json()["test"] is True
 
 
 def test_submit_unknown_question(client, seed):
