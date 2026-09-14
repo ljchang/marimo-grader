@@ -30,6 +30,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from grader.api.submissions import is_test
 from grader.db import get_engine, get_sessionmaker
 from grader.models import (
     Artifact,
@@ -134,7 +135,11 @@ def do_autograde(db: Session, run: GraderRun, sub: Submission) -> None:
     db.flush()
     if q.grading_mode == GradingMode.auto:
         sub.status = SubmissionStatus.graded
-    recompute_question_grade(db, sub.enrollment_id, q, q.assignment)
+    # A staff attempt is scored and returned to the notebook like any other, but
+    # it must not roll up into a grade -- no QuestionGrade row is written for it,
+    # so an instructor testing their own assignment leaves the gradebook alone.
+    if not is_test(sub):
+        recompute_question_grade(db, sub.enrollment_id, q, q.assignment)
 
 
 def process(db: Session, run: GraderRun) -> None:
