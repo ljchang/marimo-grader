@@ -763,6 +763,17 @@ export const api = {
     addStaff(offeringId: string, body: StaffAdd): Promise<{ netid: string; role: string }> {
       return request(`/offerings/${enc(offeringId)}/roster/staff`, { method: 'POST', body });
     },
+    /** Add or reinstate one student. Import stays the bulk path. */
+    addStudent(
+      offeringId: string,
+      body: { netid: string; display_name?: string; section?: string },
+    ): Promise<{ netid: string; role: string; status: string }> {
+      return request(`/offerings/${enc(offeringId)}/roster/students`, { method: 'POST', body });
+    },
+    /** Soft drop: the enrollment row survives, because submissions reference it. */
+    drop(offeringId: string, netid: string): Promise<{ netid: string; status: string }> {
+      return request(`/offerings/${enc(offeringId)}/roster/${enc(netid)}`, { method: 'DELETE' });
+    },
   },
 
   exports: {

@@ -55,6 +55,46 @@
     }
   }
 
+  // One student at a time: the late add, and the person Canvas has not caught up with.
+  let studentNetid = $state('');
+  let studentName = $state('');
+  let studentSection = $state('');
+  let studentMessage = $state<string | null>(null);
+  let dropping = $state<string | null>(null);
+
+  async function addStudent(e: SubmitEvent) {
+    e.preventDefault();
+    studentMessage = null;
+    error = null;
+    try {
+      const r = await api.roster.addStudent(offeringId, {
+        netid: studentNetid.trim().toLowerCase(),
+        display_name: studentName.trim() || undefined,
+        section: studentSection.trim() || undefined,
+      });
+      studentMessage = `${r.netid} added.`;
+      studentNetid = ''; studentName = ''; studentSection = '';
+      await loadRoster();
+    } catch (err) {
+      error = errorMessage(err);
+    }
+  }
+
+  async function drop(netid: string, role: string) {
+    const what = role === 'student' ? 'student' : role === 'ta' ? 'teaching assistant' : 'instructor';
+    if (!confirm(`Remove ${netid} (${what}) from this offering?\n\nTheir submissions and grades are kept, and re-adding them or a later import restores the same record.`)) return;
+    error = null;
+    dropping = netid;
+    try {
+      await api.roster.drop(offeringId, netid);
+      await loadRoster();
+    } catch (err) {
+      error = errorMessage(err);
+    } finally {
+      dropping = null;
+    }
+  }
+
   type Bucket = keyof RosterPreview;
   const buckets: { key: Bucket; label: string; hint: string }[] = [
     { key: 'adds', label: 'Adds', hint: 'in the file, not yet enrolled' },
@@ -239,6 +279,22 @@
 </section>
 
 <section class="block">
+  <div class="block-head">
+    <h2>Add a student</h2>
+    <p class="small muted" style="margin:0">For a late add. Importing the Canvas roster again is the better way to make bulk changes.</p>
+  </div>
+  <form class="card import" onsubmit={addStudent}>
+    <div class="row">
+      <label class="field" style="margin:0;min-width:160px"><span>NetID</span><input type="text" bind:value={studentNetid} required placeholder="f00abc1" /></label>
+      <label class="field" style="margin:0;min-width:200px"><span>Name (optional)</span><input type="text" bind:value={studentName} placeholder="Taken from Dartmouth at first sign-in" /></label>
+      <label class="field" style="margin:0;min-width:120px"><span>Section (optional)</span><input type="text" bind:value={studentSection} placeholder="01" /></label>
+      <button class="primary" type="submit" disabled={studentNetid.trim() === ''}>Add</button>
+    </div>
+    {#if studentMessage}<p class="small muted" style="margin:0.5rem 0 0">{studentMessage}</p>{/if}
+  </form>
+</section>
+
+<section class="block">
   <div class="block-head"><h2>Current roster <span class="count">{roster?.length ?? 0}</span></h2></div>
   {#if roster === null}
     <Loading />
@@ -255,7 +311,14 @@
               <td class="wrap">{r.display_name}</td>
               <td>{r.section ?? '—'}</td>
               <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}{#if r.active === false}<span class="muted"> (dropped)</span>{/if}</td>
-              <td>{#if r.role === 'student'}<a href="/o/{offeringId}/students/{r.netid}">Submissions</a>{/if}</td>
+              <td class="rowacts">
+                {#if r.role === 'student'}<a href="/o/{offeringId}/students/{r.netid}">Submissions</a>{/if}
+                {#if r.active !== false}
+                  <button class="linkish" onclick={() => drop(r.netid, r.role)} disabled={dropping === r.netid}>
+                    {dropping === r.netid ? 'Removing…' : 'Remove'}
+                  </button>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -267,6 +330,24 @@
 <p class="muted" id="roster-audit" style="margin-top:8px">Every grade, roster, and settings change is recorded. <a href="/o/{offeringId}/audit">Open the change log</a> if you ever need to trace one.</p>
 
 <style>
+  .rowacts {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .linkish {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--red, #8a2a00);
+    cursor: pointer;
+  }
+  .linkish:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
   .import .row {
     align-items: flex-end;
   }
