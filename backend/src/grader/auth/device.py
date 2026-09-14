@@ -98,18 +98,38 @@ def poll(db: Session, device_code: str) -> dict:
 
 LOGIN_LINK_TTL = 1800
 
+# Pre-approved single-use codes that ``/auth/exchange`` turns into a session.
+# The client string records how the code reached its owner, so the audit trail
+# can tell an operator handing over a link from a student requesting one.
+OPERATOR_LOGIN_CLIENT = "operator-login-link"
+EMAIL_LOGIN_CLIENT = "email-login-link"
+LOGIN_LINK_CLIENTS = frozenset({OPERATOR_LOGIN_CLIENT, EMAIL_LOGIN_CLIENT})
 
-def mint_login_code(db: Session, user: User) -> str:
-    """Operator-only: a pre-approved, single-use code that ``/auth/exchange`` turns into a session."""
+
+def mint_login_code(
+    db: Session,
+    user: User,
+    *,
+    client: str = OPERATOR_LOGIN_CLIENT,
+    ttl_seconds: int | None = None,
+) -> str:
+    """Mint a pre-approved, single-use code bound to ``user``.
+
+    ``client`` must be one of :data:`LOGIN_LINK_CLIENTS`; codes minted under any
+    other client are refused by :func:`consume_login_code`.
+    """
+    if client not in LOGIN_LINK_CLIENTS:
+        raise ValueError(f"unknown login-link client {client!r}")
     code = secrets.token_urlsafe(32)
+    ttl = LOGIN_LINK_TTL if ttl_seconds is None else ttl_seconds
     db.add(
         DeviceCode(
             device_code_hash=_hash(code),
             user_code="LOGIN-" + secrets.token_hex(4).upper(),
-            client="operator-login-link",
+            client=client,
             user_id=user.id,
             approved_at=utcnow(),
-            expires_at=datetime.now(UTC) + timedelta(seconds=LOGIN_LINK_TTL),
+            expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
         )
     )
     db.flush()
@@ -120,7 +140,7 @@ def consume_login_code(db: Session, code: str) -> User | None:
     row = db.scalar(select(DeviceCode).where(DeviceCode.device_code_hash == _hash(code)))
     if (
         row is None
-        or row.client != "operator-login-link"
+        or row.client not in LOGIN_LINK_CLIENTS
         or row.consumed_at is not None
         or row.user_id is None
         or _aware(row.expires_at) < datetime.now(UTC)
@@ -130,3 +150,27 @@ def consume_login_code(db: Session, code: str) -> User | None:
     user = db.get(User, row.user_id)
     db.flush()
     return user
+
+
+def login_code_rate(
+    db: Session, user: User, client: str, window_seconds: int
+) -> tuple[int, datetime | None]:
+    """How many codes of this kind were minted for ``user`` inside the window,
+    and when the most recent one was minted.
+
+    Counting rows we already store keeps rate limiting honest across restarts
+    and needs no extra table. Codes are counted whether or not they were used:
+    the cost being limited is the outbound message, not the sign-in.
+    """
+    since = datetime.now(UTC) - timedelta(seconds=window_seconds)
+    rows = db.scalars(
+        select(DeviceCode)
+        .where(
+            DeviceCode.user_id == user.id,
+            DeviceCode.client == client,
+        )
+        .order_by(DeviceCode.created_at.desc())
+    ).all()
+    recent = [r for r in rows if _aware(r.created_at) >= since]
+    latest = _aware(rows[0].created_at) if rows else None
+    return len(recent), latest

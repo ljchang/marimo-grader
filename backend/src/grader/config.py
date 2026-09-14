@@ -46,6 +46,30 @@ class Settings(BaseSettings):
     saml_sp_key: str | None = None
     saml_clock_skew_seconds: int = 120
 
+    # Email sign-in links. A break-glass sign-in path for when the IdP is not
+    # available (before SAML approval, or if it goes down mid-term): the student
+    # asks for a link at their campus address and the link opens a session.
+    # Off by default, and meant to be turned off again once SSO works -- it is
+    # weaker than SAML + Duo, since it proves only control of a mailbox.
+    email_login_enabled: bool = False
+    email_login_ttl_seconds: int = 7 * 24 * 3600
+    # Only addresses at this domain are accepted; the local part is the NetID,
+    # matching how roster.py derives a NetID from a Canvas "SIS Login ID".
+    email_login_domain: str = "dartmouth.edu"
+    email_login_max_per_day: int = 5
+    email_login_min_interval_seconds: int = 300
+
+    # Outbound mail. "smtp" talks to any relay (Amazon SES via its SMTP
+    # interface); "console" logs the message; "memory" collects it for tests.
+    mail_transport: Literal["smtp", "console", "memory"] = "console"
+    mail_from: str = "grader@example.test"
+    mail_reply_to: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = True
+
     # CORS origins allowed to run the notebook widget.
     cors_origins: list[str] = Field(
         default_factory=lambda: [
@@ -59,6 +83,16 @@ class Settings(BaseSettings):
     artifact_dir: str = "./data/artifacts"
     max_notebook_bytes: int = 2 * 1024 * 1024
     max_outputs_bytes: int = 8 * 1024 * 1024
+
+    @model_validator(mode="after")
+    def _email_login_needs_a_transport(self) -> Settings:
+        """A sign-in link nobody receives is worse than no button at all."""
+        if self.email_login_enabled and self.mail_transport == "smtp" and not self.smtp_host:
+            raise RuntimeError(
+                "GRADER_EMAIL_LOGIN_ENABLED=true with GRADER_MAIL_TRANSPORT=smtp "
+                "requires GRADER_SMTP_HOST"
+            )
+        return self
 
     @model_validator(mode="after")
     def _prod_requires_secrets(self) -> Settings:

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import html
-from urllib.parse import quote, urlencode
+import logging
+import re
+from datetime import UTC, datetime
+from urllib.parse import quote, urlencode, urlparse
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -23,8 +26,11 @@ from grader.auth.sessions import (
 from grader.config import get_settings
 from grader.db import get_db
 from grader.models import Enrollment, EnrollmentStatus, User, utcnow
+from grader.services import audit, mail
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+log = logging.getLogger("grader.auth")
 
 
 def _safe_next(next_url: str | None) -> str:
@@ -174,6 +180,158 @@ def exchange_login_code(code: str, next: str | None = None, db: Session = Depend
     resp = RedirectResponse(_frontend(_safe_next(next)), status_code=303)
     set_session_cookie(resp, sess)
     return resp
+
+
+# --- email sign-in links ----------------------------------------------------
+
+_ADDRESS_RE = re.compile(r"^[^@\s]+@[^@\s]+$")
+_LOCAL_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+# One answer for every outcome. Whether an address belongs to an enrolled
+# student is roster information, and a different response for "sent" and "not
+# found" would publish it to anyone with a form and a word list.
+_ACCEPTED = {
+    "ok": True,
+    "message": (
+        "If that address belongs to an enrolled account, a sign-in link is on its way. "
+        "The link works once and expires after seven days."
+    ),
+}
+
+_MAIL_TEXT = """\
+Hello{name},
+
+Here is your sign-in link for {site}:
+
+{link}
+
+It works once and expires in {days} days. Opening it signs this browser in; you
+can then press "Sign in" inside an assignment notebook to connect it.
+
+If you did not ask for this link you can ignore this message -- nothing has
+changed on your account.
+"""
+
+_MAIL_HTML = """\
+<p>Hello{name},</p>
+<p>Here is your sign-in link for {site}:</p>
+<p><a href="{link}">Sign in to the grader</a></p>
+<p>It works once and expires in {days} days. Opening it signs this browser in; you
+can then press <b>Sign in</b> inside an assignment notebook to connect it.</p>
+<p>If you did not ask for this link you can ignore this message &mdash; nothing has
+changed on your account.</p>
+"""
+
+
+class EmailLoginRequest(BaseModel):
+    email: str
+    next: str | None = None
+
+
+def netid_from_address(address: str, domain: str) -> str | None:
+    """Return the NetID an address stands for, or ``None`` if it is not one.
+
+    The rule matches ``roster.py._netid_from_email``: at the campus domain, the
+    local part *is* the NetID. Keeping it in one shape means the address is
+    never stored -- it is a lookup key, not a new column on ``users``.
+    """
+    e = (address or "").strip().lower()
+    if not _ADDRESS_RE.match(e):
+        return None
+    local, _, host = e.partition("@")
+    if host != domain.strip().lower() or not _LOCAL_PART_RE.match(local):
+        return None
+    return local
+
+
+def _enrolled(db: Session, user: User) -> bool:
+    return (
+        db.scalar(
+            select(Enrollment).where(
+                Enrollment.user_id == user.id,
+                Enrollment.status == EnrollmentStatus.active,
+            )
+        )
+        is not None
+    )
+
+
+@router.post("/email-login", status_code=202)
+def email_login(body: EmailLoginRequest, db: Session = Depends(get_db)):
+    """Mail a one-time sign-in link to an enrolled student's campus address.
+
+    Unauthenticated by necessity, so it is fenced in four ways: the feature is
+    off unless an operator turns it on, only addresses at the configured domain
+    are considered, only NetIDs that already have an active enrollment receive
+    anything (this route never creates a user), and each NetID is rate limited.
+    Every outcome returns the same body.
+    """
+    s = get_settings()
+    if not s.email_login_enabled:
+        raise api_error(404, "not_found", "not found")
+
+    netid = netid_from_address(body.email, s.email_login_domain)
+    if netid is None:
+        return _ACCEPTED
+    user = db.scalar(select(User).where(User.netid == netid))
+    if user is None or not _enrolled(db, user):
+        return _ACCEPTED
+
+    sent_today, latest = device.login_code_rate(
+        db, user, device.EMAIL_LOGIN_CLIENT, window_seconds=24 * 3600
+    )
+    too_soon = (
+        latest is not None
+        and (datetime.now(UTC) - latest).total_seconds() < s.email_login_min_interval_seconds
+    )
+    if sent_today >= s.email_login_max_per_day or too_soon:
+        log.info("email login link rate limited netid=%s sent_today=%d", netid, sent_today)
+        return _ACCEPTED
+
+    code = device.mint_login_code(
+        db,
+        user,
+        client=device.EMAIL_LOGIN_CLIENT,
+        ttl_seconds=s.email_login_ttl_seconds,
+    )
+    link = f"{s.base_url}/api/v1/auth/exchange?code={quote(code, safe='')}"
+    target = _safe_next(body.next)
+    if target != "/":
+        link += "&next=" + quote(target, safe="")
+
+    fields = {
+        "name": f" {user.display_name}" if user.display_name else "",
+        "site": urlparse(s.frontend_url).hostname or "DartBrains",
+        "link": link,
+        "days": max(1, s.email_login_ttl_seconds // 86400),
+    }
+    try:
+        mail.send(
+            mail.Message(
+                to=f"{netid}@{s.email_login_domain}",
+                subject="Your sign-in link for the DartBrains grader",
+                text=_MAIL_TEXT.format(**fields),
+                html=_MAIL_HTML.format(**fields),
+            )
+        )
+    except mail.MailError:
+        # Drop the code we just minted so a delivery outage does not burn the
+        # student's daily allowance, and keep the response indistinguishable.
+        log.exception("email login link could not be delivered netid=%s", netid)
+        db.rollback()
+        return _ACCEPTED
+
+    audit.record(
+        db,
+        actor_id=user.id,
+        offering_id=None,
+        entity="user",
+        entity_id=user.id,
+        action="email_login_sent",
+        after={"client": device.EMAIL_LOGIN_CLIENT, "ttl_seconds": s.email_login_ttl_seconds},
+        reason="self-service sign-in link",
+    )
+    return _ACCEPTED
 
 
 # --- device handshake -------------------------------------------------------
