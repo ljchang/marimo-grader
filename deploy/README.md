@@ -344,8 +344,31 @@ runtime — only an SMTP username and password.
    ```
 
    Check with `aws sesv2 get-account --region us-east-1 --query ProductionAccessEnabled`.
-5. **Create SMTP credentials** in the SES console (SMTP settings → Create SMTP credentials). This
-   makes an IAM user scoped to `ses:SendRawEmail`; the password is shown once.
+5. **Create SMTP credentials.** The console button (SMTP settings → Create SMTP credentials)
+   works, but it creates an IAM user with account-wide send rights. Scoping it to this one
+   identity is better and is two commands:
+
+   ```bash
+   aws iam create-user --user-name dartbrains-grader-ses
+   aws iam put-user-policy --user-name dartbrains-grader-ses \
+       --policy-name ses-send-mail-dartbrains --policy-document '{
+         "Version": "2012-10-17",
+         "Statement": [{
+           "Effect": "Allow",
+           "Action": ["ses:SendRawEmail", "ses:SendEmail"],
+           "Resource": "arn:aws:ses:us-east-1:<account-id>:identity/mail.dartbrains.org"
+         }]}'
+   aws iam create-access-key --user-name dartbrains-grader-ses
+   ```
+
+   The SMTP *username* is the access key id. The SMTP *password* is an HMAC derivation of the
+   secret access key, which `deploy/ses-smtp-password.py` computes:
+
+   ```bash
+   python3 deploy/ses-smtp-password.py <SecretAccessKey> us-east-1
+   ```
+
+   A leaked key then sends only as this domain, never as another identity in the account.
 6. **Fill in `.env`** on the droplet and redeploy:
 
    ```bash
