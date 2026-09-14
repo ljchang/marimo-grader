@@ -24,6 +24,14 @@ export type SubmissionStatus =
   | 'graded'
   | 'failed';
 
+export interface Health {
+  ok: boolean;
+  env: string;
+  auth_mode: 'saml' | 'dev' | 'disabled';
+  submissions_enabled: boolean;
+  email_login_enabled: boolean;
+}
+
 export interface ErrorEnvelope {
   error: { code: string; message: string };
 }
@@ -503,6 +511,8 @@ interface RequestOptions {
   token?: string;
   signal?: AbortSignal;
   redirect?: RequestRedirect;
+  /** Skip the CSRF header. Only for routes that take no session at all. */
+  anonymous?: boolean;
 }
 
 function qs(query?: Query): string {
@@ -523,7 +533,7 @@ function url(path: string, query?: Query): string {
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const method = opts.method ?? 'GET';
   const mutating = method !== 'GET';
-  const useCsrf = mutating && !opts.token;
+  const useCsrf = mutating && !opts.token && !opts.anonymous;
 
   const build = async (freshCsrf: boolean): Promise<Request> => {
     const headers = new Headers({ Accept: 'application/json' });
@@ -575,6 +585,18 @@ export const api = {
     },
     metadataUrl(): string {
       return url('/auth/saml/metadata');
+    },
+    /**
+     * Ask for a one-time sign-in link by email. Unauthenticated, and the answer
+     * is deliberately the same whether or not the address is enrolled, so the
+     * caller can only ever report "if it exists, it has been sent".
+     */
+    emailLogin(email: string, next?: string): Promise<{ ok: boolean; message: string }> {
+      return request('/auth/email-login', {
+        method: 'POST',
+        body: { email, next },
+        anonymous: true,
+      });
     },
     me(signal?: AbortSignal): Promise<Me> {
       return request<Me>('/auth/me', { signal });
@@ -774,6 +796,13 @@ export const api = {
         body,
       });
     },
+  },
+
+  /** Service status. Lives outside /api/v1 and needs no session. */
+  async health(signal?: AbortSignal): Promise<Health> {
+    const res = await fetch('/api/health', { headers: { Accept: 'application/json' }, signal });
+    if (!res.ok) throw new ApiError(res.status, 'unavailable', 'health check failed');
+    return (await res.json()) as Health;
   },
 
   events: {

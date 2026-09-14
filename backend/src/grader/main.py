@@ -63,6 +63,8 @@ def create_app() -> FastAPI:
             "env": cur.env,
             "auth_mode": cur.auth_mode,
             "submissions_enabled": cur.auth_mode != "disabled",
+            # Lets the sign-in page offer the link form only when it will work.
+            "email_login_enabled": cur.email_login_enabled,
         }
 
     for r in (

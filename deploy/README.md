@@ -287,13 +287,93 @@ uv run grader publish ../../dartbrains-assignments/assignments/glm.py \
 
 ## Signing in to the web UI before SSO is enabled
 
-`grader login-link <netid>` prints a one-time URL (valid 10 minutes) that signs that NetID into
+`grader login-link <netid>` prints a one-time URL (valid 30 minutes) that signs that NetID into
 the browser UI. It works in every auth mode and can only be minted with shell access, so it is
 also the break-glass path if SSO is ever unavailable:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm web grader login-link f00275v
 ```
+
+## Email sign-in links (Amazon SES)
+
+A self-service version of the link above: the sign-in page offers "email me a link", the student
+enters their Dartmouth address, and the server mails a one-time link. It exists for the window
+before the SP is registered, and as the break-glass path if SSO goes down mid-term. **Turn it off
+once `GRADER_AUTH_MODE=saml` works** — proving control of a mailbox is weaker than SAML + Duo.
+
+Guard rails, all enforced server-side: the route 404s unless enabled; only addresses at
+`GRADER_EMAIL_LOGIN_DOMAIN` are considered; only NetIDs with an active enrollment receive
+anything (it never creates a user); each NetID is limited to `MAX_PER_DAY` links no closer
+together than `MIN_INTERVAL_SECONDS`; every send is written to `grade_audit`; and the response is
+identical whether or not the address is enrolled, so the form cannot be used to test roster
+membership. No address is stored — the local part of a campus address *is* the NetID, the same
+rule `roster.py` uses for a Canvas "SIS Login ID".
+
+### One-time SES setup
+
+SES is reached over its SMTP interface, so the service needs no AWS SDK and no AWS credentials at
+runtime — only an SMTP username and password.
+
+1. **Pick a region** and stay in it; SES identities are per-region. `us-east-1` is fine.
+2. **Verify a sending domain.** Use a subdomain (`mail.dartbrains.org`) so grader mail cannot
+   affect the apex domain's reputation:
+
+   ```bash
+   aws sesv2 create-email-identity --email-identity mail.dartbrains.org --region us-east-1
+   aws sesv2 get-email-identity --email-identity mail.dartbrains.org --region us-east-1 \
+       --query 'DkimAttributes.Tokens'
+   ```
+
+   Each of the three tokens becomes a DNS CNAME:
+   `<token>._domainkey.mail.dartbrains.org → <token>.dkim.amazonses.com`.
+   dartbrains.org is on Google nameservers, so add them there.
+3. **SPF and DMARC** TXT records on `mail.dartbrains.org`:
+   `v=spf1 include:amazonses.com ~all` and `_dmarc` → `v=DMARC1; p=none; rua=mailto:you@...`.
+4. **Request production access.** New accounts are in the SES sandbox and can only send to
+   verified addresses, which is useless for a class. Do this first — approval usually takes about
+   a day but is not instant:
+
+   ```bash
+   aws sesv2 put-account-details --region us-east-1 \
+       --production-access-enabled --mail-type TRANSACTIONAL \
+       --website-url https://dartbrains.org \
+       --use-case-description "One-time sign-in links for students enrolled in a single course. \
+   Recipients are course rosters only; volume is tens of messages per term; bounces and \
+   complaints are monitored."
+   ```
+
+   Check with `aws sesv2 get-account --region us-east-1 --query ProductionAccessEnabled`.
+5. **Create SMTP credentials** in the SES console (SMTP settings → Create SMTP credentials). This
+   makes an IAM user scoped to `ses:SendRawEmail`; the password is shown once.
+6. **Fill in `.env`** on the droplet and redeploy:
+
+   ```bash
+   GRADER_EMAIL_LOGIN_ENABLED=true
+   GRADER_MAIL_TRANSPORT=smtp
+   GRADER_MAIL_FROM="DartBrains Grader <grader@mail.dartbrains.org>"
+   GRADER_MAIL_REPLY_TO=luke.j.chang@dartmouth.edu
+   GRADER_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+   GRADER_SMTP_PORT=587
+   GRADER_SMTP_USERNAME=<SES SMTP username>
+   GRADER_SMTP_PASSWORD=<SES SMTP password>
+   ```
+
+   `GRADER_MAIL_FROM` must be at a verified identity or SES rejects every message.
+7. **Verify delivery** before telling students, and confirm the address shape works at all:
+
+   ```bash
+   curl -sS -X POST https://grader.dartbrains.org/api/v1/auth/email-login \
+        -H 'Content-Type: application/json' -d '{"email":"<yournetid>@dartmouth.edu"}'
+   ```
+
+   A 202 means "accepted, and I will not tell you whether that address matched" — check the
+   mailbox, and the container logs if nothing arrives. If `<netid>@dartmouth.edu` does not
+   deliver at Dartmouth, the NetID-from-address rule does not hold and the roster needs to carry
+   real addresses instead; find that out here rather than after the first assignment.
+
+Leaving `GRADER_MAIL_TRANSPORT=console` logs messages instead of sending them, which is the right
+setting for staging and for testing the flow before SES is approved.
 
 ## Worker sandbox
 
