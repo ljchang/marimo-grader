@@ -85,6 +85,22 @@ class Settings(BaseSettings):
             "https://dartbrains.org",
         ]
     )
+    # MoLab serves the running notebook from a nested iframe on a per-session
+    # subdomain of molab.run (e.g. sb-fb0578637b21faaa-session.sb.molab.run),
+    # not from molab.marimo.io. The sandbox id is different every session, so no
+    # fixed list can cover it and the widget's fetch is blocked without this.
+    # Safe to match broadly here: allow_credentials is False, so no cookie ever
+    # crosses origins, and every route the widget calls is Bearer-authenticated
+    # with a token the student has to approve in a first-party tab.
+    cors_origin_regex: str | None = r"^https://[A-Za-z0-9.-]+\.molab\.run$"
+
+    @property
+    def cors_regex(self) -> str | None:
+        """Origin regex for CORS: the configured one, plus localhost off-prod."""
+        patterns = [self.cors_origin_regex] if self.cors_origin_regex else []
+        if self.env != "prod":
+            patterns.append(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$")
+        return "|".join(f"(?:{p})" for p in patterns) or None
 
     artifact_dir: str = "./data/artifacts"
     max_notebook_bytes: int = 2 * 1024 * 1024
