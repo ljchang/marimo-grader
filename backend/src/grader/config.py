@@ -38,8 +38,14 @@ class Settings(BaseSettings):
     # Auth mode: "saml" uses Dartmouth; "dev" enables /auth/dev-login.
     auth_mode: Literal["saml", "dev", "disabled"] = "dev"
     saml_sp_entity_id: str | None = None
-    saml_idp_entity_id: str = "urn:mace:incommon:dartmouth.edu"
-    saml_idp_sso_url: str = "https://login.dartmouth.edu/cas/idp/profile/SAML2/POST/SSO"
+    # Dartmouth moved from Apero CAS to Microsoft EntraID in 2026. Values below
+    # are the EntraID tenant's, from the IdP metadata Dartmouth ITC publishes at
+    # https://dartmouth.github.io/dartmouth-idp-metadata/metadata.xml
+    # (the logout endpoint did not change in the move).
+    saml_idp_entity_id: str = "https://sts.windows.net/995b0936-48d6-40e5-a31e-bf689ec9446f/"
+    saml_idp_sso_url: str = (
+        "https://login.microsoftonline.com/995b0936-48d6-40e5-a31e-bf689ec9446f/saml2"
+    )
     saml_idp_logout_url: str = "https://logout.dartmouth.edu"
     saml_idp_cert: str | None = None  # PEM or base64 body
     saml_sp_cert: str | None = None

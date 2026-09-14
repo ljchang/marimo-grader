@@ -159,14 +159,49 @@ your laptop once it is in `.env`; the file is gitignored (`*.pem`, `.env`).
 `GRADER_ARTIFACT_DIR` is set by the image (`/data/artifacts`); leave it out.
 `POSTGRES_PASSWORD` is only for the local compose stack and can be dropped.
 
-### SAML registration
+### SAML registration (Microsoft EntraID)
 
-Send Dartmouth IT the SP metadata, which the running service publishes at
-`https://grader.dartbrains.org/api/v1/auth/saml/metadata`. Until the IdP knows the SP,
-sign-in redirects to `login.dartmouth.edu` and fails there, but `/api/health` and the
-static UI work, so you can deploy first and register second. The IdP metadata, a working
-SP metadata template, and the registration email template are in the pbs_knowledge
-repository.
+Dartmouth moved from Apero CAS to EntraID in 2026. Give ITC these three values; everything
+else they need is in the SP metadata the running service publishes:
+
+| | |
+|---|---|
+| Identifier (Entity ID) | `https://grader.dartbrains.org` |
+| Reply URL (ACS) | `https://grader.dartbrains.org/api/v1/auth/saml/acs` |
+| SP metadata | `https://grader.dartbrains.org/api/v1/auth/saml/metadata` |
+
+The IdP side comes from ITC's published metadata,
+<https://dartmouth.github.io/dartmouth-idp-metadata/metadata.xml>. The entity ID and SSO URL
+are the defaults in `config.py`; only the signing certificate has to be set:
+
+```bash
+GRADER_AUTH_MODE=saml
+GRADER_SAML_SP_ENTITY_ID=https://grader.dartbrains.org
+GRADER_SAML_IDP_ENTITY_ID=https://sts.windows.net/995b0936-48d6-40e5-a31e-bf689ec9446f/
+GRADER_SAML_IDP_SSO_URL=https://login.microsoftonline.com/995b0936-48d6-40e5-a31e-bf689ec9446f/saml2
+GRADER_SAML_IDP_LOGOUT_URL=https://logout.dartmouth.edu   # unchanged from the CAS era
+GRADER_SAML_IDP_CERT=<X509Certificate body from the metadata above>
+```
+
+Verify the certificate you paste against the thumbprint ITC publishes:
+
+```bash
+curl -s https://dartmouth.github.io/dartmouth-idp-metadata/metadata.xml \
+  | sed -n 's:.*<X509Certificate>\(.*\)</X509Certificate>.*:\1:p' | tr -d ' \n' \
+  | base64 -d | openssl x509 -inform der -noout -fingerprint -sha1
+# SHA1 Fingerprint=B6:A5:E2:42:97:F1:EE:90:64:44:32:75:2D:B8:9A:7F:29:B6:23:23
+```
+
+**The NetID comes from the local part of `eduPersonPrincipalName`**, which EntraID sources
+from `userPrincipalName`. That is correct only while Dartmouth accounts are
+`netid@dartmouth.edu` with the name forms as aliases. If that ever changes, every
+enrollment lookup silently misses, because enrollments are keyed on the NetID from the
+Canvas SIS Login ID. ITC releases each attribute under both its OID and its friendly name;
+`saml.py` tries the friendly name first and falls back to the OID, so either works.
+
+Until the IdP knows the SP, sign-in redirects to EntraID and fails there, but `/api/health`
+and the static UI work, so you can deploy first and register second. `grader login-link`
+and email sign-in links both work in the meantime.
 
 ## 4. Copy files and deploy
 
