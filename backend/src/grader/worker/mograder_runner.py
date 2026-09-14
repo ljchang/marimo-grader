@@ -2,8 +2,10 @@
 
 MoGrader (``mograder``) is used strictly as a library:
 
-* ``mograder.grading.integrity.check_integrity`` reinjects the instructor's
-  ``check()`` and marks cells if the student modified them.
+* ``mograder.grading.integrity.check_integrity`` swaps in the instructor's
+  ``check()`` and marks cells. It is called twice, against two baselines: the
+  instructor copy to decide what to grade, and the released copy to decide
+  whether the student actually changed anything. See :func:`grade`.
 * ``mograder.grading.integrity.inject_hidden_tests`` restores hidden tests.
 * ``mograder.grading.runner.run_notebook`` executes the notebook in a sandbox
   (rlimits, wall-clock timeout, optional bubblewrap with no network) and
@@ -68,17 +70,32 @@ def grade(db: Session, sub: Submission) -> GradeResult:
 
     version = sub.version
     instructor_art = db.get(Artifact, version.instructor_artifact_id)
+    release_art = db.get(Artifact, version.student_artifact_id)
     notebook_art = db.get(Artifact, sub.notebook_artifact_id)
     assert instructor_art is not None and notebook_art is not None
     source_text = store().get(instructor_art).decode()
     submitted_text = store().get(notebook_art).decode()
 
-    tampered: list[str] = []
+    # Two different questions, two different baselines.
+    #
+    # What to GRADE: the instructor's check cells, which carry the hidden tests.
+    # check_integrity swaps them in, and that swap is how hidden tests reach the
+    # graded notebook -- it is load-bearing, not incidental.
     integ = integrity.check_integrity(source_text, submitted_text)
-    tampered += list(integ.tampered_checks)
-    if integ.tampered_marks:
-        tampered.append("__marks__")
     fixed = integ.fixed_source
+
+    # What to REPORT: whether the student changed anything. Comparing their cells
+    # against the instructor copy always says yes, because the copy they were given
+    # has the hidden tests stripped out of those very cells -- so the two can never
+    # match. Diff against the release instead: that is what they actually received,
+    # and a difference there is a real edit. (mograder's own hub compares this way.)
+    tampered: list[str] = []
+    if release_art is not None:
+        release_text = store().get(release_art).decode()
+        real = integrity.check_integrity(release_text, submitted_text)
+        tampered += list(real.tampered_checks)
+        if real.tampered_marks:
+            tampered.append("__marks__")
     if integrity.has_hidden_tests(source_text):
         fixed, _hidden = integrity.inject_hidden_tests(source_text, fixed)
 
