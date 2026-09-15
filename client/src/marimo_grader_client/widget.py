@@ -431,6 +431,17 @@ async function submit(state, btn, out) {
   }
 
   setModel(model, { result: created, status: "done", message: `attempt ${created.attempt_no} received` });
+  // Let the host page know (marimo-book's workbench records the submission as
+  // a version in the assignment's history). Plain DOM event, no listener needed.
+  try {
+    window.dispatchEvent(
+      new CustomEvent("marimo-grader:submitted", {
+        detail: { attempt: created.attempt_no, submission_id: created.id, submitted_at: created.submitted_at },
+      })
+    );
+  } catch (_) {
+    // non-browser host or a sandbox without CustomEvent; the submission itself succeeded
+  }
   clear(out);
   const card = scoreBlock(created);
   out.append(card);
