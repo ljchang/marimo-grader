@@ -35,6 +35,13 @@ Warming happens inside each assignment's own prepared venv (the one
 ``prepare_env`` builds from its PEP 723 block), so the download goes through the
 very ``localizer.get_file`` the notebook will call rather than a reimplementation
 of its path rules here.
+
+A ``get_file`` reference is warmed for **every** subject, because the subject
+argument is normally a loop variable and cannot be read statically. An assignment
+that only ever touches one subject therefore over-warms -- ten conditions pinned
+to S01 fetch all twenty subjects, 382 MB rather than 19 MB. That is deliberate:
+over-warming costs disk on a persistent volume, while under-warming fails the
+autograde run, so the trade is not symmetric.
 """
 
 from __future__ import annotations
