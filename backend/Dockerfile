@@ -2,8 +2,12 @@
 FROM python:3.13-slim-bookworm AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # xmlsec for python3-saml; bubblewrap for the autograde sandbox (worker only, harmless on web).
+# git so uv can resolve VCS dependencies in a notebook's PEP 723 block: an assignment
+# pinning a package that is not on PyPI yet (nltools @ git+https://...@master, while 0.6
+# is unreleased) otherwise fails at prepare_env with "Git executable not found", which
+# surfaces as "notebook execution failed" on every submission of that assignment.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libxmlsec1-openssl libxmlsec1-dev pkg-config build-essential bubblewrap \
+      libxmlsec1-openssl libxmlsec1-dev pkg-config build-essential bubblewrap git \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
