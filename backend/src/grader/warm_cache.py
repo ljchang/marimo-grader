@@ -22,10 +22,19 @@ Where the file list comes from
 ------------------------------
 Two sources, in this order:
 
-1. **The published notebook itself.** Every dataset path in the course funnels
-   through ``dartbrains_tools.data.localizer``, so the notebook's own calls are
-   the authoritative list. Deriving it here means the list cannot drift from the
+1. **The instructor notebook.** Every dataset path in the course funnels through
+   ``dartbrains_tools.data.localizer``, so the notebook's own calls are the
+   authoritative list. Deriving it here means the list cannot drift from the
    assignment the way a hand-maintained one does.
+
+   It has to be the *instructor* copy, not the published one. Publishing replaces
+   each ``### BEGIN SOLUTION`` block with ``# YOUR CODE HERE``, so a question whose
+   data access lives in its solution -- the normal case for a question that asks the
+   student to load something -- reads as needing nothing at all. Scanning the
+   student copy warmed 0 of 2 references for one assignment here and 2 of 10 for
+   another, and ``--check`` then reported success, because it only verifies what it
+   found. The instructor copy is a superset: it contains every non-solution cell
+   verbatim plus the solutions.
 2. **The assignment's ``required_datasets`` setting**, for anything the scan
    cannot see -- a path built at run time, or a dataset reached through another
    library. Entries are ``"<repo_id> <filename>"`` pairs.
@@ -50,9 +59,9 @@ import ast
 import json
 import subprocess
 
-from grader.api.public import _student_bytes
 from grader.db import get_sessionmaker
-from grader.models import Assignment, Offering
+from grader.models import Artifact, Assignment, Offering
+from grader.services.artifacts import store
 from grader.worker.materialize import rewrite_dependencies
 from grader.worker.sandbox import prepare_env
 
@@ -199,7 +208,11 @@ def warm(args: argparse.Namespace) -> int:
                 if not assignment.versions:
                     continue
                 version = assignment.versions[-1]
-                source = _student_bytes(db, version).decode("utf-8", "replace")
+                art = db.get(Artifact, version.instructor_artifact_id)
+                if art is None:
+                    print("    no instructor notebook stored; skipping")
+                    continue
+                source = store().get(art).decode("utf-8", "replace")
 
                 refs = references(source) + declared(assignment)
                 if not refs:
