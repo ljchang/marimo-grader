@@ -114,7 +114,9 @@ def references(source: str) -> list[dict]:
       the confounds TSV never gets warmed and the run fails at grade time.
     * any bare string literal that names a condition, which covers the common
       ``load_condition("video_sentence")`` style indirection where the condition
-      reaches ``get_file`` through a local helper rather than directly.
+      reaches ``get_file`` through a local helper rather than directly -- and a
+      reference to ``localizer.CONDITIONS``, which means all ten without naming
+      any of them.
     """
     try:
         tree = ast.parse(source)
@@ -164,7 +166,17 @@ def references(source: str) -> list[dict]:
             "video_right_hand",
             "video_sentence",
         ]
-    for name in sorted(literals & set(CONDITIONS)):
+    # A notebook that iterates localizer.CONDITIONS names no condition at all, so the
+    # literal scan below sees nothing. Treat the reference itself as naming all ten.
+    wants_all = "CONDITIONS" in {
+        node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+    } or "CONDITIONS" in {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    for name in sorted(set(CONDITIONS) if wants_all else literals & set(CONDITIONS)):
         add({"kind": "get_file", "scope": "betas", "suffix": name})
     return refs
 
