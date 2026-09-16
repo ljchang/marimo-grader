@@ -58,3 +58,20 @@ def test_notebook_without_data_needs_nothing():
 
 def test_unparseable_source_does_not_raise():
     assert references("this is not python (((") == []
+
+
+def test_solution_only_access_is_why_the_instructor_copy_is_scanned():
+    """Publishing strips solutions, so a student copy hides the data access in them.
+
+    warm() reads the instructor notebook for exactly this reason. This pins the
+    difference the two copies produce, so the reason cannot be quietly lost.
+    """
+    instructor = HEADER + (
+        "def _(localizer):\n"
+        "    ### BEGIN SOLUTION\n"
+        "    localizer.load_confounds(sub)\n"
+        "    ### END SOLUTION\n"
+    )
+    published = HEADER + "def _(localizer):\n    # YOUR CODE HERE\n    pass\n"
+    assert "confounds" in _suffixes(instructor)
+    assert references(published) == []
