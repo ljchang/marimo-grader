@@ -13,8 +13,7 @@ reported as "notebook execution failed" -- a grader failure rather than a zero.
 Run this after every deploy and after publishing an assignment that touches new
 data::
 
-    docker compose -f docker-compose.prod.yml run --rm worker \
-        python deploy/warm_cache.py
+    docker compose -f docker-compose.prod.yml run --rm worker grader warm-cache
 
 Add ``--check`` to report what is missing and change nothing, which is what you
 want in a smoke test.
@@ -50,16 +49,12 @@ import argparse
 import ast
 import json
 import subprocess
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend" / "src"))
-
-from grader.api.public import _student_bytes  # noqa: E402
-from grader.db import get_sessionmaker  # noqa: E402
-from grader.models import Assignment, Offering  # noqa: E402
-from grader.worker.materialize import rewrite_dependencies  # noqa: E402
-from grader.worker.sandbox import prepare_env  # noqa: E402
+from grader.api.public import _student_bytes
+from grader.db import get_sessionmaker
+from grader.models import Assignment, Offering
+from grader.worker.materialize import rewrite_dependencies
+from grader.worker.sandbox import prepare_env
 
 # Runs inside the assignment's own venv: resolves each reference with the real
 # localizer, so this file never has to know how a beta filename is spelled.
@@ -193,12 +188,8 @@ def declared(assignment: Assignment) -> list[dict]:
     return out
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--check", action="store_true", help="report gaps without downloading")
-    ap.add_argument("--slug", help="warm only this assignment")
-    args = ap.parse_args()
-
+def warm(args: argparse.Namespace) -> int:
+    """Warm (or, with ``--check``, audit) the cache for every published assignment."""
     failures = 0
     with get_sessionmaker()() as db:
         for offering in db.query(Offering).all():
@@ -240,7 +231,3 @@ def main() -> int:
     else:
         print("\nCache warm: every published assignment can read its data offline.")
     return 1 if failures else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

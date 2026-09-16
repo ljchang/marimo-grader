@@ -285,6 +285,13 @@ def cmd_login_link(a: argparse.Namespace) -> None:
     print(f"# one-time sign-in link for {netid}, valid {LOGIN_LINK_TTL // 60} min", file=sys.stderr)
 
 
+def cmd_warm_cache(a: argparse.Namespace) -> None:
+    """Warm the worker's HuggingFace cache; see grader.warm_cache for why it is needed."""
+    from grader.warm_cache import warm
+
+    raise SystemExit(warm(a))
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="grader")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -322,6 +329,13 @@ def main(argv: list[str] | None = None) -> None:
     tok.add_argument("--admin", action="store_true", help="also make the user a platform admin")
     tok.add_argument("--display-name")
     tok.set_defaults(fn=cmd_token)
+    warm = sub.add_parser(
+        "warm-cache",
+        help="pre-download the datasets published assignments need (the sandbox has no network)",
+    )
+    warm.add_argument("--check", action="store_true", help="report gaps without downloading")
+    warm.add_argument("--slug", help="warm only this assignment")
+    warm.set_defaults(fn=cmd_warm_cache)
     ll = sub.add_parser(
         "login-link", help="print a one-time browser sign-in link for a NetID (operator use)"
     )

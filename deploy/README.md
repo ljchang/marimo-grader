@@ -442,13 +442,17 @@ at the persistent `hf_cache` volume; `deploy/warm_cache.py` fills it.
 Run it after every deploy, and after publishing an assignment that touches new data:
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm worker python deploy/warm_cache.py
-docker compose -f docker-compose.prod.yml run --rm worker python deploy/warm_cache.py --check
+docker compose -f docker-compose.prod.yml run --rm worker grader warm-cache
+docker compose -f docker-compose.prod.yml run --rm worker grader warm-cache --check
 ```
 
+It is a `grader` subcommand rather than a script under `deploy/` because the backend image
+is built with `context: backend` (see `.github/workflows/images.yml`), so nothing outside
+`backend/` can be copied into it — a script left in `deploy/` is simply not present in the
+container that has to run it.
+
 `--check` downloads nothing and reports what is missing, running cache-only exactly as the
-sandbox does; it exits non-zero when anything is absent, so it works as a smoke test. `--slug
-<name>` limits either mode to one assignment.
+sandbox does; it exits non-zero when anything is absent, so it works as a smoke test. `--slug <name>` limits either mode to one assignment.
 
 The file list is derived from each published notebook's own `localizer.get_file` and
 `localizer.download` calls, so it cannot drift from the assignment. Anything built at run time
