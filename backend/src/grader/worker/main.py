@@ -27,7 +27,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from grader.api.submissions import is_test
@@ -52,11 +52,26 @@ log = logging.getLogger("grader.worker")
 RENDER_TIMEOUT = int(os.environ.get("GRADER_RENDER_TIMEOUT", "180"))
 
 
+# Render before autograde when both are queued at the same instant. Rendering runs
+# outside bubblewrap and so is the only one of the two with network; autograde runs
+# under --unshare-net and can only read what is already in HF_HOME. For an assignment
+# that downloads data, running autograde first on a cold cache fails the whole run
+# (LocalEntryNotFoundError -> "notebook execution failed") while render then silently
+# warms the cache, so the next attempt succeeds and the failure cannot be reproduced.
+#
+# Ordering on queued_at alone does not express this: queued_at defaults to
+# datetime.now(UTC), and two rows added in the same flush get the same value about 90%
+# of the time, so which ran first was left to whatever the database returned. Warming
+# the cache at deploy time is the real fix (see deploy/warm_cache.py); this makes the
+# cold case recover on the first submission rather than the second.
+_RUN_PRIORITY = case({RunKind.render.value: 0}, value=GraderRun.kind, else_=1)
+
+
 def claim(db: Session) -> GraderRun | None:
     stmt = (
         select(GraderRun)
         .where(GraderRun.status == RunStatus.queued)
-        .order_by(GraderRun.queued_at)
+        .order_by(GraderRun.queued_at, _RUN_PRIORITY)
         .limit(1)
     )
     if get_engine().dialect.name == "postgresql":
