@@ -35,6 +35,15 @@ Two sources, in this order:
    another, and ``--check`` then reported success, because it only verifies what it
    found. The instructor copy is a superset: it contains every non-solution cell
    verbatim plus the solutions.
+
+Beyond the datasets, the analysis libraries fetch resources of their own on first
+use, into the same cache. Constructing an ``nltools`` ``BrainData`` downloads a
+default MNI mask from the separate ``nltools/niftis`` dataset, which no notebook
+mentions and no scan can find. Warming therefore ends by building one object from
+a file it just fetched, so the library pulls what it needs while a network is
+still available. Without that, every neuroimaging assignment fails inside the
+sandbox on its first ``BrainData(...)`` with ``LocalEntryNotFoundError`` --
+with every dataset file present and ``--check`` reporting success.
 2. **The assignment's ``required_datasets`` setting**, for anything the scan
    cannot see -- a path built at run time, or a dataset reached through another
    library. Entries are ``"<repo_id> <filename>"`` pairs.
@@ -80,17 +89,35 @@ from dartbrains_tools.data import localizer
 
 refs = json.loads(sys.argv[1])
 ok, missing = 0, []
+first_path = None
 for ref in refs:
     try:
         if ref["kind"] == "get_file":
             for subject in localizer.get_subjects():
-                localizer.get_file(subject, ref["scope"], ref["suffix"])
+                first_path = localizer.get_file(subject, ref["scope"], ref["suffix"]) or first_path
                 ok += 1
         else:
             localizer.download(ref["repo_id"], ref["filename"])
             ok += 1
     except Exception as exc:
         missing.append(f'{ref} -> {type(exc).__name__}')
+
+# The dataset files are not the whole story. Analysis libraries fetch their own
+# resources on first use -- nltools pulls a default brain mask from the separate
+# nltools/niftis dataset the moment a BrainData is constructed -- and those land
+# in the same HF cache. Nothing in the notebook names them, so exercise the
+# library instead of trying to enumerate them: build one object from a file we
+# just fetched and let it pull whatever it needs while there is still a network.
+if first_path is not None and first_path.endswith((".nii", ".nii.gz")):
+    try:
+        from nltools.data import BrainData
+
+        BrainData(first_path)
+        ok += 1
+    except ImportError:
+        pass
+    except Exception as exc:
+        missing.append(f"library resources (BrainData) -> {type(exc).__name__}")
 print(json.dumps({"ok": ok, "missing": missing}))
 """
 
