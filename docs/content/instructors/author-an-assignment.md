@@ -135,4 +135,4 @@ The publish command refuses a notebook with invalid markers or leaked solutions,
 
 ## Datasets
 
-The sandbox has no network. If an assignment needs data from Hugging Face or elsewhere, list it in the assignment's `required_datasets` setting so the operator can warm the worker's cache, or keep the assignment on simulated data.
+The sandbox has no network. An assignment that needs data from Hugging Face reaches it through `dartbrains_tools.data.localizer`, and the operator warms the worker's cache before grading with `deploy/warm_cache.py`, which reads the published notebook's own `get_file`/`download` calls -- so you do not have to list anything. If your notebook builds a path at run time, where that scan cannot see it, list it in the assignment's `required_datasets` setting as `"<repo_id> <filename>"` instead. Either way, ask the operator to re-run the warm step after you publish, or the first submission will fail with a grader error rather than a zero.

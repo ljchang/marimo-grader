@@ -433,6 +433,37 @@ runtime — only an SMTP username and password.
 Leaving `GRADER_MAIL_TRANSPORT=console` logs messages instead of sending them, which is the right
 setting for staging and for testing the flow before SES is approved.
 
+## Dataset cache
+
+Autograding runs under `--unshare-net`, so an assignment that downloads data can only read
+what is already in the worker's HuggingFace cache. `docker-compose.prod.yml` points `HF_HOME`
+at the persistent `hf_cache` volume; `deploy/warm_cache.py` fills it.
+
+Run it after every deploy, and after publishing an assignment that touches new data:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm worker python deploy/warm_cache.py
+docker compose -f docker-compose.prod.yml run --rm worker python deploy/warm_cache.py --check
+```
+
+`--check` downloads nothing and reports what is missing, running cache-only exactly as the
+sandbox does; it exits non-zero when anything is absent, so it works as a smoke test. `--slug
+<name>` limits either mode to one assignment.
+
+The file list is derived from each published notebook's own `localizer.get_file` and
+`localizer.download` calls, so it cannot drift from the assignment. Anything built at run time
+and therefore invisible to that scan goes in the assignment's `required_datasets` setting as
+`"<repo_id> <filename>"` entries, which the script also warms. Warming happens inside the
+assignment's own prepared venv, so files are fetched through the same code path the notebook
+will use rather than a reimplementation of its path rules.
+
+Skipping this is not a quiet failure: a cold cache makes the autograde run raise
+`LocalEntryNotFoundError`, which is reported as "notebook execution failed" — a grader failure
+to investigate rather than a zero for the student. Sizes are small enough not to worry about
+(a per-condition beta image is about 2 MB; a 20-subject, 4-condition assignment is ~150 MB),
+but raw preprocessed bold is ~57 MB per subject, so an assignment that loops over subjects on
+raw data is worth a second look before it is published.
+
 ## Worker sandbox
 
 `docker-compose.prod.yml` runs the worker with `security_opt: [seccomp:unconfined,
