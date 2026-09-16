@@ -91,14 +91,27 @@ print(json.dumps({"ok": ok, "missing": missing}))
 """
 
 
+# localizer helpers that call get_file inside dartbrains_tools, so the scope and
+# suffix never appear in the notebook. Keep in step with dartbrains_tools.data.localizer.
+_HELPER_SCOPES = {
+    "load_confounds": ("derivatives", "confounds"),
+    "load_events": ("raw", "events"),
+}
+
+
 def references(source: str) -> list[dict]:
     """Dataset references a notebook makes, derived from its own source.
 
-    Recognises three shapes:
+    Recognises four shapes:
 
     * ``localizer.get_file(subject, "<scope>", "<suffix>")`` with literal scope
       and suffix -- warmed for every subject, since assignments loop over them.
     * ``localizer.download("<repo_id>", "<filename>")``.
+    * the ``localizer`` helpers that wrap ``get_file`` inside dartbrains_tools
+      rather than in the notebook (``load_confounds``, ``load_events``). These are
+      invisible to a scan of the notebook alone: a notebook calling
+      ``load_confounds(sub)`` names no scope or suffix anywhere, so without this
+      the confounds TSV never gets warmed and the run fails at grade time.
     * any bare string literal that names a condition, which covers the common
       ``load_condition("video_sentence")`` style indirection where the condition
       reaches ``get_file`` through a local helper rather than directly.
@@ -124,7 +137,10 @@ def references(source: str) -> list[dict]:
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         args = [a.value if isinstance(a, ast.Constant) else None for a in node.args]
-        if node.func.attr == "get_file" and len(args) >= 3:
+        if node.func.attr in _HELPER_SCOPES:
+            scope, suffix = _HELPER_SCOPES[node.func.attr]
+            add({"kind": "get_file", "scope": scope, "suffix": suffix})
+        elif node.func.attr == "get_file" and len(args) >= 3:
             if isinstance(args[1], str) and isinstance(args[2], str):
                 add({"kind": "get_file", "scope": args[1], "suffix": args[2]})
         elif node.func.attr == "download" and len(args) >= 2:
