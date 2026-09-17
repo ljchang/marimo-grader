@@ -89,6 +89,29 @@ def test_link_is_single_use(client, seed, outbox):
     assert client.get(path, follow_redirects=False).status_code == 400
 
 
+def test_link_cannot_be_polled_as_a_device_code(client, seed, outbox):
+    """A mailed link opens a browser session; it is not a shortcut to a token.
+
+    Both kinds of pre-approved code live in ``device_codes``, and the device
+    handshake's poll would happily mint a notebook JWT from any row that is
+    already approved. An email code is approved the moment it is minted and
+    lives for seven days, so polling it would turn a mailbox into an
+    eight-hour notebook credential without ever opening the link.
+    """
+    post(client, "f00abc1@dartmouth.edu")
+    link = [w for w in outbox[0].text.split() if "exchange?code=" in w][0]
+    code = link.split("exchange?code=")[1]
+
+    r = client.post("/api/v1/auth/device/token", json={"device_code": code})
+    assert r.status_code == 200
+    assert r.json() == {"status": "expired"}
+
+    # And refusing it did not burn it: the link itself still works.
+    assert (
+        client.get(link.replace("http://testserver", ""), follow_redirects=False).status_code == 303
+    )
+
+
 def test_unknown_and_unenrolled_look_identical(client, seed, outbox):
     """No response, timing aside, distinguishes these three cases."""
     with get_sessionmaker()() as db:
