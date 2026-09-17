@@ -2,7 +2,9 @@
 
 For instructors. Every action that can affect a grade or who is in the course is recorded, so a dispute or a mistake can be traced.
 
-The change log is not part of the daily navigation; it is linked from the roster page and from each student's history page. It lists, newest first:
+This is the page of that name *inside the grader* — an audit trail of your course. The project's release notes are the separate [Changelog](../changelog.md) in the nav.
+
+It is not part of the daily navigation; it is linked from the roster page and from each student's history page. It lists, newest first:
 
 | Recorded action | What the entry shows |
 |---|---|
