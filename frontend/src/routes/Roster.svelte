@@ -127,6 +127,10 @@
     };
   });
 
+  // A drop is soft: the enrollment row survives because submissions and grades
+  // reference it. That is a storage concern, not something to show the class.
+  const enrolled = $derived(roster?.filter((r) => r.status === 'active') ?? null);
+
   async function loadRoster() {
     try {
       roster = await api.roster.list(offeringId);
@@ -295,29 +299,27 @@
 </section>
 
 <section class="block">
-  <div class="block-head"><h2>Current roster <span class="count">{roster?.length ?? 0}</span></h2></div>
-  {#if roster === null}
+  <div class="block-head"><h2>Current roster <span class="count">{enrolled?.length ?? 0}</span></h2></div>
+  {#if enrolled === null}
     <Loading />
-  {:else if roster.length === 0}
+  {:else if enrolled.length === 0}
     <p class="empty">Nobody is enrolled yet. Import the Canvas roster above.</p>
   {:else}
     <div class="tablewrap">
       <table class="data">
         <thead><tr><th>NetID</th><th>Name</th><th>Section</th><th>Role</th><th></th></tr></thead>
         <tbody>
-          {#each roster as r (r.netid)}
-            <tr class:inactive={r.status !== 'active'}>
+          {#each enrolled as r (r.netid)}
+            <tr>
               <td class="mono">{r.netid}</td>
               <td class="wrap">{r.display_name}</td>
               <td>{r.section ?? '—'}</td>
-              <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}{#if r.status !== 'active'}<span class="muted"> (dropped)</span>{/if}</td>
+              <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}</td>
               <td class="rowacts">
                 {#if r.role === 'student'}<a href="/o/{offeringId}/students/{r.netid}">Submissions</a>{/if}
-                {#if r.status === 'active'}
-                  <button class="linkish" onclick={() => drop(r.netid, r.role)} disabled={dropping === r.netid}>
-                    {dropping === r.netid ? 'Removing…' : 'Remove'}
-                  </button>
-                {/if}
+                <button class="linkish" onclick={() => drop(r.netid, r.role)} disabled={dropping === r.netid}>
+                  {dropping === r.netid ? 'Removing…' : 'Remove'}
+                </button>
               </td>
             </tr>
           {/each}
@@ -370,8 +372,5 @@
   tr.excluded td {
     color: var(--muted);
     text-decoration: line-through;
-  }
-  tr.inactive td {
-    color: var(--muted);
   }
 </style>
