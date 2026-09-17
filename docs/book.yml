@@ -39,6 +39,11 @@ launch_buttons:
 dependencies:
   mode: env
 
+# Auto-include the repo-root CHANGELOG.md as a "Changelog" page in the nav.
+# Single source of truth: the file the release notes are written into also
+# becomes a docs page, so readers can browse release history in-book.
+include_changelog: true
+
 toc:
   # Without an explicit title MkDocs takes the nav label from the page's first
   # H1, so the sidebar reads "marimo-grader" directly under the site name.

@@ -1,0 +1,26 @@
+name: Release Drafter
+
+# Updates the draft GitHub Release whenever a PR merges to main. The draft
+# accumulates entries grouped by PR label; the draft is published (auto-tagging
+# the commit) when you click "Publish release" on github.com.
+#
+# The published `v*` tag then triggers images.yml, which builds the backend and
+# web images tagged `1.2.3`, `1.2` and `latest` for deploy.sh to pull. Release
+# notes are generated here; CHANGELOG.md is written by hand from them and is
+# published to the docs site by `include_changelog` in docs/book.yml.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write   # required to draft releases
+  pull-requests: read
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
