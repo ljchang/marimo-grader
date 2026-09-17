@@ -31,7 +31,7 @@ docker compose -f docker-compose.prod.yml exec worker \
 
 If that prints *bwrap: No permissions to create new namespace*, the `security_opt` line is missing or commented out, or the host has not enabled unprivileged user namespaces — `deploy/bootstrap.sh` does the latter.
 
-Set `GRADER_USE_BUBBLEWRAP=1` to require it. Without bubblewrap the notebook still runs with resource limits and a timeout, but it has network, which is not a configuration to run a term on.
+`GRADER_USE_BUBBLEWRAP=1` **enables** the sandbox; it does not require it. The worker uses bubblewrap only when the flag is set *and* `bwrap` is on its PATH, so a flag set against an image that lacks the binary is silently ignored and notebooks grade unsandboxed, with network. There is no mode that fails closed, which is exactly why the check above is worth running on every new host rather than trusting the setting.
 
 ## The dataset cache
 
@@ -48,7 +48,9 @@ Run it **after every deploy, and after publishing an assignment that touches new
 
 ### Where the file list comes from
 
-From each published notebook's own `localizer.get_file` and `localizer.download` calls, so it cannot drift from the assignment. Warming happens inside that assignment's own prepared environment, through the same code path the notebook will use, rather than a reimplementation of its path rules.
+From each version's **instructor** notebook — its own `localizer.get_file` and `localizer.download` calls — so it cannot drift from the assignment. The instructor copy is the one scanned deliberately: solutions are stripped from the student copy, and the data references usually live inside them, so scanning the published copy finds nothing and `--check` then reports success against an empty cache.
+
+Warming happens inside that assignment's own prepared environment, through the same code path the notebook will use, rather than a reimplementation of its path rules.
 
 Anything built at run time — a filename assembled from a loop variable, say — is invisible to that scan. List those in the assignment's `required_datasets` setting as `"<repo_id> <filename>"` entries, which the warm step also reads.
 

@@ -28,7 +28,7 @@ Errors: `{"error": {"code": "not_enrolled", "message": "..."}}` with 401 (unauth
 
 ### Sign-in links (no session)
 
-- `GET /auth/exchange?code=…&next=/` → consumes a one-time login code minted by `grader login-link` or mailed by `/auth/email-login`, sets a session cookie, redirects. Works in every auth mode, including `disabled`. Codes are single use; a device code cannot be exchanged here and a login code cannot be polled as a device code.
+- `GET /auth/exchange?code=…&next=/` → consumes a one-time login code minted by `grader login-link` or mailed by `/auth/email-login`, sets a session cookie, redirects. Works in every auth mode, including `disabled`. Codes are single use. `/auth/exchange` accepts only login-link rows, and `POST /auth/device/token` refuses rows minted by `grader login-link`.
 - `POST /auth/email-login` `{"email": "netid@example.edu", "next": "/"}` → **202** with a fixed body, always. 404 when `GRADER_EMAIL_LOGIN_ENABLED` is false. The response is identical whether the address matched an enrolled account, was rate limited, or could not be delivered — see [Email sign-in links](../auth/email-links.md).
 
 ### Device handshake (notebook)

@@ -16,11 +16,22 @@ The `hf_cache`, `uv_cache` and `sandboxes` volumes are rebuildable; Caddy's cert
 
 A nightly archive from the deploy user's crontab, keeping fourteen days:
 
-```cron
-15 3 * * * docker run --rm -v grader_artifacts:/data:ro -v /srv/grader/backups:/backup alpine:3 \
-  tar czf /backup/artifacts-$(date +\%F).tar.gz -C /data . && \
-  find /srv/grader/backups -name 'artifacts-*.tar.gz' -mtime +14 -delete
+Put it in a script, because a crontab line has no continuation character — a command split over several lines becomes several broken entries:
+
+```bash
+# /srv/grader/backup-artifacts.sh, chmod +x
+#!/bin/sh
+set -eu
+docker run --rm -v grader_artifacts:/data:ro -v /srv/grader/backups:/backup alpine:3 \
+  tar czf "/backup/artifacts-$(date +%F).tar.gz" -C /data .
+find /srv/grader/backups -name 'artifacts-*.tar.gz' -mtime +14 -delete
 ```
+
+```cron
+15 3 * * * /srv/grader/backup-artifacts.sh >> /srv/grader/backups/backup.log 2>&1
+```
+
+(`%` is special in a crontab command and would need escaping as `\%`; keeping the `date` call in the script sidesteps it.)
 
 `mkdir -p /srv/grader/backups` first. **Then get the archive off the host**, with `rclone copy /srv/grader/backups <remote>:grader-backups` or `s3cmd`, because a backup that lives on the machine it protects is not a backup. Whole-disk snapshots from the provider are a reasonable second layer, not a first one.
 

@@ -182,7 +182,7 @@ Publishing refuses a notebook with invalid markers or leaked solutions, but catc
 
 The grading sandbox has **no network**, so an assignment can only read data that is already cached on the worker.
 
-Assignments that fetch data through `dartbrains_tools.data.localizer` are handled automatically: the operator runs `grader warm-cache`, which reads the published notebook's own `get_file`/`download` calls — you do not have to list anything. If your notebook builds a path at run time, where that scan cannot see it, list it in the assignment's `required_datasets` setting as `"<repo_id> <filename>"`.
+Assignments that fetch data through `dartbrains_tools.data.localizer` are handled automatically: the operator runs `grader warm-cache`, which reads your **instructor** notebook's own `get_file`/`download` calls — you do not have to list anything, and it sees the references inside your solutions. If your notebook builds a path at run time, where that scan cannot see it, list it in the assignment's `required_datasets` setting as `"<repo_id> <filename>"`.
 
 Either way: **tell your operator to re-run the warm step after you publish.** Otherwise the first submission fails with a grader error rather than a zero — recoverable, but only after somebody notices. They can confirm with `grader warm-cache --check --slug <your-slug>`, which downloads nothing and exits non-zero if anything is missing.
 

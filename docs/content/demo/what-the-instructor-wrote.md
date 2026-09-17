@@ -175,7 +175,11 @@ One cell, copied into the student notebook unchanged, listing every question and
         return
     ```
 
-Identical — there is nothing to strip. The detail worth knowing is `outputs=`: what a reader types into a `mo.ui` element is not part of the notebook file, so passing it explicitly is what gets it stored with the attempt and shown to the grader beside the rendered notebook. Forget it and the question submits an empty answer.
+Identical — there is nothing in a written question to strip.
+
+(The demo student notebook is the one exception to "byte-for-byte what publishing produced": it leaves the `signin_button`, `submit_button` and `feedback` cells out entirely, because no grading server stands behind a documentation page. A published assignment carries all three.)
+
+The detail worth knowing is `outputs=`: what a reader types into a `mo.ui` element is not part of the notebook file, so passing it explicitly is what gets it stored with the attempt and shown to the grader beside the rendered notebook. Forget it and the question submits an empty answer.
 
 ## What publishing does to the rest of the file
 

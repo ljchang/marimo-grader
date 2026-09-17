@@ -122,17 +122,7 @@ If that reports *No permissions to create new namespace*, see [Sandbox and data]
 
 ## 6. The first course
 
-Sign in as yourself — through SAML if it is registered, otherwise with a one-time link:
-
-```bash
-docker compose -f docker-compose.prod.yml run --rm web grader login-link <netid>
-```
-
-Switch to **Admin** mode and create the first course, its offering, and its instructor. Everything on this screen is platform-level: no student data appears here, and an administrator cannot read any.
-
-![The admin page: courses with their offerings and instructors, and forms to add each](../../images/admin-courses.png)
-
-Or do it from the command line, which is also how you get going before sign-in is available:
+Start on the command line. This is not the alternative to signing in — on an empty database it is the only way in, for two reasons: `grader login-link` refuses a NetID that has no user row yet, and a first SAML sign-in creates an ordinary user, because nothing in the sign-in path grants platform admin. Somebody has to be made one from a shell.
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm web grader seed \
@@ -143,9 +133,19 @@ docker compose -f docker-compose.prod.yml run --rm web grader token <netid> \
     --offering neuroimaging/2026-fall --role instructor --admin
 ```
 
-The trailing `--students` with nothing after it matters: `seed` defaults to two example students, and an empty list is how you say *no students* on a real server. Real ones arrive by [roster import](../instructors/roster-and-staff.md).
+`seed` creates the course, the offering and the instructor — who is also made a platform admin, which is the part that matters here. The trailing `--students` with nothing after it matters too: `seed` defaults to two example students, and an empty list is how you say *no students* on a real server. Real ones arrive by [roster import](../instructors/roster-and-staff.md).
 
-That token is valid eight hours and lets an instructor publish from their laptop without a browser:
+Now you can sign in, through SAML if it is registered, or with a one-time link:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm web grader login-link <netid>
+```
+
+**Admin** mode then has what it needs, and further courses and offerings can be created there. Everything on that screen is platform-level: no student data appears, and an administrator cannot read any.
+
+![The admin page: courses with their offerings and instructors, and forms to add each](../../images/admin-courses.png)
+
+The token from the second command is valid eight hours and lets an instructor publish from their laptop without a browser:
 
 ```bash
 uv run grader publish assignments/glm.py \

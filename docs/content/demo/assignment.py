@@ -101,14 +101,17 @@ def _():
     return (TRIALS,)
 
 
-@app.function
-def keep_between(values, lo, hi):
-    # YOUR CODE HERE
-    pass
+@app.cell
+def _():
+    def keep_between(values, lo, hi):
+        # YOUR CODE HERE
+        pass
+
+    return (keep_between,)
 
 
 @app.cell
-def _(TRIALS, g, mo):
+def _(TRIALS, g, keep_between, mo):
     _probe = keep_between([400], 150, 1500)
     mo.stop(
         _probe is None,
@@ -194,9 +197,9 @@ def _(g, mean_rt, mo):
         [
             (isinstance(mean_rt, (int, float)), "mean_rt should be a number", 1),
             (
-                isinstance(mean_rt, (int, float)) and abs(mean_rt - 417.9) < 0.05,
-                "mean_rt should be 417.9 — the mean of the eleven trials Q1 keeps, to one "
-                "decimal place",
+                isinstance(mean_rt, (int, float)) and abs(mean_rt - 417.9) < 0.6,
+                "mean_rt should be about 418 — the mean of the eleven trials Q1 keeps, not "
+                "of all fourteen",
                 2,
             ),
             # HIDDEN TESTS

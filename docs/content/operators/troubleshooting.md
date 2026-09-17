@@ -18,8 +18,9 @@ docker compose -f docker-compose.prod.yml logs --tail 50 web worker proxy
 |---|---|
 | `Refusing to start in prod with missing configuration: …` | exactly what it says; the named settings are absent. This check is deliberate — do not set `GRADER_ENV=dev` to get past it |
 | `GRADER_EMAIL_LOGIN_ENABLED=true … requires GRADER_SMTP_HOST` | email links are on with no relay. Set the host, or set `GRADER_MAIL_TRANSPORT=console` |
-| `GRADER_JWT_PRIVATE_KEY_PEM must be an Ed25519 key` | the key is a different algorithm — regenerate it with the command in [Deploy](deploy.md#generate-the-secrets) |
 | The migration container exits non-zero | a migration failed; the rest of the deploy stopped on purpose. Read its log before retrying |
+
+One that is **not** a startup failure, and catches people out: a `GRADER_JWT_PRIVATE_KEY_PEM` of the wrong algorithm. The production validator only checks that the key is non-empty, and the key itself is not parsed until a token is minted — so the service deploys cleanly, `/api/health` is green, and the first sign-in fails with `GRADER_JWT_PRIVATE_KEY_PEM must be an Ed25519 key`. Regenerate it with the command in [Deploy](deploy.md#generate-the-secrets).
 
 ## No certificate
 
