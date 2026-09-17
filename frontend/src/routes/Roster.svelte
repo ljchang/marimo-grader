@@ -184,7 +184,7 @@
     <p class="eyebrow"><a href="/o/{offeringId}">{enrollment?.title ?? 'Course'}</a></p>
     <h1>Roster</h1>
   </div>
-  <div class="meta"><span>{roster?.length ?? 0} enrolled, including staff</span></div>
+  <div class="meta"><span>{enrolled?.length ?? 0} enrolled, including staff</span></div>
 </div>
 
 {#if error}<Notice kind="error" label="Error">{error}</Notice>{/if}
@@ -303,7 +303,12 @@
   {#if enrolled === null}
     <Loading />
   {:else if enrolled.length === 0}
-    <p class="empty">Nobody is enrolled yet. Import the Canvas roster above.</p>
+    {#if roster && roster.length > 0}
+      <!-- Rows exist, all dropped. Telling them to import would be wrong advice. -->
+      <p class="empty">Everyone has been removed from this offering. Adding a NetID back restores their record.</p>
+    {:else}
+      <p class="empty">Nobody is enrolled yet. Import the Canvas roster above.</p>
+    {/if}
   {:else}
     <div class="tablewrap">
       <table class="data">
