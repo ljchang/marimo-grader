@@ -21,10 +21,6 @@ def _roster(client, seed):
     return client.get(f"/api/v1/offerings/{seed.offering_id}/roster").json()
 
 
-def _netids(rows):
-    return {r["netid"] for r in (rows.get("rows") or rows.get("roster") or [])}
-
-
 def test_add_student(client, seed):
     csrf = login(client, "prof")
     r = client.post(
