@@ -33,6 +33,8 @@ The right pane holds the score. If the question has a rubric, each item has its 
 
 Keyboard: `j` and `k` move between students, `f` jumps to the feedback box, and `Cmd+Enter` (or `Ctrl+Enter`) saves. New submissions that arrive while you grade are added to the end of the queue without moving you.
 
+Staff can submit to their own offering, so an instructor's test submissions appear here too — that is the intended way to rehearse an assignment before releasing it.
+
 ## How a score becomes a grade
 
 Every save creates a new score record; nothing is overwritten, and each save is in the change log with who, when, before, after, and an optional reason.

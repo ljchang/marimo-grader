@@ -1,58 +1,192 @@
 # Deploy
 
-For the person running the server. The reference deployment is one small virtual machine plus a managed PostgreSQL database; the full step-by-step runbook with every command is [`deploy/README.md`](https://github.com/ljchang/marimo-grader/blob/main/deploy/README.md) in the repository.
+The runbook, end to end. It is written against DigitalOcean because that is what the reference deployment uses, but nothing here is specific to it: any Ubuntu host with Docker and any PostgreSQL 16 will do, and the only DigitalOcean-flavoured steps are the ones about creating the machine and the database.
 
-## Shape
+Read [Overview](overview.md) first if you have not.
+
+Allow an hour for a first deploy, most of it waiting for DNS and for a database to provision.
+
+## 1. Create the infrastructure
+
+**The host.** Ubuntu 24.04 LTS, 2 vCPU / 4 GB, SSH key authentication only, in a region near your users. If you are using DigitalOcean: a Premium Intel or AMD droplet, in the default VPC for the region, monitoring enabled, tagged `grader`.
+
+**A firewall.** Inbound SSH from your own addresses, HTTP 80 and HTTPS 443 (TCP and UDP) from anywhere, all outbound. The host also runs `ufw`; the cloud firewall is the outer layer.
+
+**PostgreSQL 16.** Managed, smallest plan, **same region and private network as the host**, with the host as its only trusted source. Create a database and user both called `grader`, then take the *private network* connection string. It looks like:
 
 ```
-GitHub Actions  --builds-->  ghcr.io/ljchang/marimo-grader-backend   (API and worker)
-                             ghcr.io/ljchang/marimo-grader-web       (Caddy + the Svelte app)
-                                     |
-                                     v  docker compose pull
-droplet (Ubuntu 24.04, 2 vCPU / 4 GB)         managed PostgreSQL (private network)
-  proxy   Caddy: TLS, security headers, /api and /a to the API
-  web     FastAPI
-  worker  grading in bubblewrap, no network inside the sandbox
-  volumes artifacts, prepared environments, uv and dataset caches
+postgresql://grader:<password>@private-db-…ondigitalocean.com:25060/grader?sslmode=require
 ```
 
-Nothing is built on the server. Every push to `main` builds and pushes both images; a deploy is `docker compose pull` plus a migration.
+The application uses psycopg, so the value in `.env` is that string with the scheme changed to `postgresql+psycopg://`. Keep `?sslmode=require` — a managed cluster refuses unencrypted connections, and you want it to.
 
-## Steps
+**DNS.** An A record for the hostname pointing at the host's public IPv4. Caddy obtains a Let's Encrypt certificate on first start, so this must resolve *before* the first deploy or the certificate request fails and you wait out a rate limit.
 
-1. **Create the infrastructure.** A droplet with your SSH key, a cloud firewall allowing 22 from you and 80/443 from anywhere, a managed PostgreSQL 16 cluster in the same region and VPC with the droplet as its only trusted source, and a DNS A record for the hostname. Use the database's private connection string with `sslmode=require`.
-2. **Bootstrap the droplet** as root: `ssh root@<ip> 'bash -s' < deploy/bootstrap.sh`. It installs Docker, creates a `deploy` user, enables the firewall, unattended security updates, and fail2ban, and prepares `/srv/grader`.
-3. **Write `.env`** in `/srv/grader` (mode 600). Generate a session secret and an Ed25519 key for notebook tokens, create a self-signed SAML certificate, and fill in the database URL. [Configuration](../reference/configuration.md) lists every setting. In production the service refuses to start if a required secret is missing.
-4. **Copy `docker-compose.prod.yml` and `deploy/deploy.sh`** into `/srv/grader` and run `./deploy.sh`. It pulls images, fixes volume ownership, runs migrations, starts the services, and waits for the health check.
-5. **Verify**: `curl https://<host>/api/health` returns `{"ok": true, ...}`; the SAML metadata is at `/api/v1/auth/saml/metadata`.
-6. **Seed the first course** and mint an instructor token or sign-in link with the [command line](../reference/cli.md), then publish an assignment.
+## 2. Bootstrap the host
 
-## Redeploying
+From your laptop, with the repository checked out:
 
 ```bash
-ssh deploy@<ip> 'cd /srv/grader && ./deploy.sh'          # latest main
-ssh deploy@<ip> 'cd /srv/grader && ./deploy.sh sha-abc1234'  # a specific build
+ssh root@<host-ip> 'bash -s' < deploy/bootstrap.sh
 ```
 
-Rolling back is the same command with an older tag. Migrations run forward only; roll back the application, not the schema, unless a migration is known to be reversible.
+That installs Docker, creates a `deploy` user with the docker group and root's SSH keys, enables unattended security upgrades, opens 22/80/443 in `ufw`, starts fail2ban, creates `/srv/grader`, and permits the unprivileged user namespaces the grading sandbox needs. It is safe to re-run.
 
-## The worker sandbox on Docker
-
-Student code runs inside bubblewrap with the filesystem read-only and no network. Docker's defaults block the user namespaces and the fresh `/proc` mount bubblewrap needs, so the worker service sets `security_opt: [seccomp:unconfined, apparmor:unconfined, systempaths=unconfined]`. Verify after the first deploy:
+Then let the host pull the images. If the packages are public, skip this; otherwise create a classic personal access token with only the `read:packages` scope and:
 
 ```bash
+ssh deploy@<host-ip>
+echo '<token>' | docker login ghcr.io -u <github-username> --password-stdin
+```
+
+## 3. Write `.env`
+
+In `/srv/grader`, mode 600. Start from [`.env.example`](https://github.com/ljchang/marimo-grader/blob/main/.env.example); [Configuration](../reference/configuration.md) is the full list. With `GRADER_ENV=prod` the service refuses to start if a required secret is missing — that refusal is the point, so do not work around it.
+
+### Generate the secrets
+
+```bash
+# Session cookie signing secret
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+
+# Ed25519 key for notebook tokens (run inside the image, which has the dependencies)
+docker run --rm ghcr.io/ljchang/marimo-grader-backend:main \
+  python -c "from grader.auth.tokens import generate_private_key_pem as g; print(g())"
+
+# SAML service-provider certificate and key, 10 years, self-signed
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -keyout sp.key -out sp.crt -subj "/CN=grader.example.edu"
+```
+
+Multi-line PEM values go into `.env` on one line with `\n` separators — pydantic-settings unescapes them inside double quotes:
+
+```bash
+printf 'GRADER_SAML_SP_KEY="%s"\n' "$(awk 'NF {printf "%s\\n", $0}' sp.key)"
+```
+
+Delete `sp.key` from your laptop once it is in `.env`, and put a copy of `.env` in a password manager — it is the only copy of both keys.
+
+### The values that matter
+
+| Variable | Set to |
+|---|---|
+| `GRADER_ENV` | `prod` |
+| `GRADER_HOST` | the hostname Caddy serves and gets a certificate for |
+| `GRADER_BASE_URL`, `GRADER_FRONTEND_URL` | `https://<hostname>` — both, in a single-host deployment |
+| `GRADER_DATABASE_URL` | the private connection string, `postgresql+psycopg://…?sslmode=require` |
+| `GRADER_SESSION_SECRET` | generated above; **stable across deploys** or everyone is signed out |
+| `GRADER_COOKIE_SECURE` | `true` |
+| `GRADER_JWT_PRIVATE_KEY_PEM` | generated above |
+| `GRADER_AUTH_MODE` | `saml`, or `disabled` until registration completes |
+| `GRADER_SAML_*` | see [SAML](../auth/saml.md) |
+| `GRADER_CORS_ORIGINS` | every origin a notebook will run on: your course site, `https://molab.marimo.io` |
+| `GRADER_IMAGE_TAG` | `main`, or pin a release |
+
+`GRADER_ARTIFACT_DIR` is set by the image; leave it out.
+
+/// admonition | The setting people forget
+    type: tip
+
+`GRADER_CORS_ORIGINS`. It is not needed to deploy, and not needed to sign in to the web app, so an omission surfaces only when a student presses Submit from the course website and is told the grader could not be reached. Add the origins when you set up, not when someone reports it.
+///
+
+## 4. Deploy
+
+```bash
+scp docker-compose.prod.yml deploy/deploy.sh .env deploy@<host-ip>:/srv/grader/
+ssh deploy@<host-ip> 'chmod 600 /srv/grader/.env && cd /srv/grader && ./deploy.sh'
+```
+
+`deploy.sh` pulls both images at `GRADER_IMAGE_TAG`, fixes volume ownership for the non-root container user, runs the migration (a failure here stops the deploy before anything else changes), starts `web`, `worker` and `proxy`, waits for the health check, prunes old images, and prints `docker compose ps`.
+
+## 5. Verify
+
+```bash
+curl -fsS https://<hostname>/api/health
+# {"ok":true,"env":"prod","auth_mode":"saml"}
+
+curl -sI https://<hostname>/ | grep -iE 'strict-transport|content-security|x-robots'
+
+curl -fsS https://<hostname>/api/v1/auth/saml/metadata | head -3
+```
+
+Then check the sandbox, which is the one thing that fails silently later if it is wrong:
+
+```bash
+cd /srv/grader
 docker compose -f docker-compose.prod.yml exec worker \
   bwrap --ro-bind / / --unshare-all --dev /dev --proc /proc -- /bin/true && echo sandbox ok
 ```
 
-Environments for notebooks are built outside the sandbox, one per distinct dependency list, and reused; the first submission of a new assignment takes about a minute longer than the rest.
+If that reports *No permissions to create new namespace*, see [Sandbox and data](sandbox-and-data.md).
 
-## Staging and production
+## 6. The first course
 
-Run staging and production as separate hosts with separate databases. Set `GRADER_STAGING=1` on staging so search engines ignore it and the header is marked. Student notebooks embed the server they were published from, so a notebook published on staging always submits to staging.
+Sign in as yourself — through SAML if it is registered, otherwise with a one-time link:
 
-## After the first deploy
+```bash
+docker compose -f docker-compose.prod.yml run --rm web grader login-link <netid>
+```
 
-Sign in with an operator link (see [Single sign-on](../operators/single-sign-on.md)), switch to Admin mode, and create the first course and offering. Everything on this page is platform-level; no student data appears here.
+Switch to **Admin** mode and create the first course, its offering, and its instructor. Everything on this screen is platform-level: no student data appears here, and an administrator cannot read any.
 
 ![The admin page: courses with their offerings and instructors, and forms to add each](../../images/admin-courses.png)
+
+Or do it from the command line, which is also how you get going before sign-in is available:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm web grader seed \
+    --course neuroimaging --title "Introduction to Neuroimaging Analysis" \
+    --term 2026-fall --instructor <netid>
+
+docker compose -f docker-compose.prod.yml run --rm web grader token <netid> \
+    --offering neuroimaging/2026-fall --role instructor --admin
+```
+
+That token is valid eight hours and lets an instructor publish from their laptop without a browser:
+
+```bash
+uv run grader publish assignments/glm.py \
+    --server https://<hostname> --offering neuroimaging/2026-fall \
+    --slug glm --title "GLM" --token <token>
+```
+
+## 7. Before students arrive
+
+- [Warm the dataset cache](sandbox-and-data.md#the-dataset-cache) if any assignment reads data. Skipping this does not produce zeros; it produces grader failures.
+- Import the roster, which also sets up [Canvas export](../instructors/canvas-export.md).
+- Set up [backups](backups-and-upgrades.md) and test a restore once.
+- Submit one assignment yourself, end to end, as a student would. Staff can submit precisely so that this is possible.
+
+## Redeploying
+
+```bash
+ssh deploy@<host> 'cd /srv/grader && ./deploy.sh'              # latest main
+ssh deploy@<host> 'cd /srv/grader && ./deploy.sh sha-1a2b3c4'  # a specific commit
+ssh deploy@<host> 'cd /srv/grader && ./deploy.sh v0.2.0'       # a release tag
+```
+
+A tag passed this way applies to that run only; put it in `.env` to make it stick. Rolling back is the same command with an older tag — but migrations are forward-only, so roll back the application, not the schema, unless you have checked that the migration in between is reversible.
+
+Prefer deploying between assignment deadlines. Nothing about a deploy affects open student notebooks, but a restart during a submission spike is needless drama.
+
+## Useful commands
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f web worker proxy
+docker compose -f docker-compose.prod.yml run --rm web grader --help
+docker compose -f docker-compose.prod.yml exec web \
+  python -c "from grader.config import get_settings; print(get_settings().env)"
+```
+
+## Hotfixing without CI
+
+The host never builds. If you must ship something CI cannot:
+
+```bash
+docker build -t ghcr.io/ljchang/marimo-grader-backend:hotfix backend
+docker build -t ghcr.io/ljchang/marimo-grader-web:hotfix -f deploy/web/Dockerfile .
+docker push … && ./deploy.sh hotfix
+```
+
+Then get the change onto `main` and redeploy from a real build, so the next person does not inherit a mystery tag.

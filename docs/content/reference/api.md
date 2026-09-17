@@ -24,12 +24,23 @@ Errors: `{"error": {"code": "not_enrolled", "message": "..."}}` with 401 (unauth
 - `GET /auth/csrf` → `{"csrf_token": "..."}`
 - Dev only (`GRADER_AUTH_MODE=dev`): `GET /auth/dev-login?netid=f00abc1&next=/` sets a session for that NetID (creating the user if needed).
 
+- `PATCH /auth/me` `{"preferred_name": "..."}` → sets the name the caller is called by. Edits only the caller's own row — there is no netid parameter. Writes `preferred_name`, never `display_name`, which belongs to the identity provider and is overwritten at each login; blank or null clears it.
+
+### Sign-in links (no session)
+
+- `GET /auth/exchange?code=…&next=/` → consumes a one-time login code minted by `grader login-link` or mailed by `/auth/email-login`, sets a session cookie, redirects. Works in every auth mode, including `disabled`. Codes are single use; a device code cannot be exchanged here and a login code cannot be polled as a device code.
+- `POST /auth/email-login` `{"email": "netid@example.edu", "next": "/"}` → **202** with a fixed body, always. 404 when `GRADER_EMAIL_LOGIN_ENABLED` is false. The response is identical whether the address matched an enrolled account, was rate limited, or could not be delivered — see [Email sign-in links](../auth/email-links.md).
+
 ### Device handshake (notebook)
 
 - `POST /auth/device` body `{"client": "dartbrains-tools/0.2.0"}` → `{"device_code": "...", "user_code": "ABCD-1234", "verification_url": "https://.../auth/device/verify?code=ABCD-1234", "expires_in": 600, "interval": 3}`
 - `GET /auth/device/verify?code=ABCD-1234` → browser page; requires session (redirects through `/auth/login` if none); on success binds the code to the NetID and renders "You can close this tab."
 - `POST /auth/device/token` body `{"device_code": "..."}` → `{"status": "pending"}` (200) while waiting; `{"status": "approved", "access_token": "<jwt>", "token_type": "bearer", "expires_in": 28800, "netid": "f00abc1"}` once approved; `{"status": "expired"}` after expiry.
 - JWT claims: `sub` = NetID, `scope` = `"notebook"`, `iat`, `exp` (8 h), `jti`. Signed Ed25519 (`EdDSA`).
+
+## Health
+
+- `GET /api/health` (no prefix, no auth) → `{"ok": true, "env": "prod", "auth_mode": "saml", "submissions_enabled": true, "email_login_enabled": false}`. The notebook widget checks `submissions_enabled` before starting a handshake, so a student is told submission is unavailable rather than watching one fail.
 
 ## Offerings
 
@@ -87,7 +98,7 @@ Publishing (`POST .../versions`) is finalized server-side: the server injects `g
 ## Operator commands (server shell)
 
 - `grader token <netid> [--offering course/term --role instructor --admin]` → notebook/CLI token, works in any auth mode.
-- `grader login-link <netid>` → one-time browser sign-in URL (10 min) exchanged at `GET /auth/exchange?code=`.
+- `grader login-link <netid>` → one-time browser sign-in URL (30 min, single use) exchanged at `GET /auth/exchange?code=`.
 
 ## Export
 

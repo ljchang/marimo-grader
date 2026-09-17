@@ -21,7 +21,9 @@ theme:
     text: Geist
     code: Geist Mono
 
-# These are Markdown pages; there is nothing to launch.
+# Most pages are Markdown. The two demo pages carry a real assignment notebook,
+# which opens in marimo-book's workbench drawer and runs in the reader's browser
+# -- so there is still nothing for the header's launch buttons to launch.
 launch_buttons:
   molab: false
   github: false
@@ -33,10 +35,27 @@ dependencies:
 toc:
   - file: content/index.md
 
+  - section: Try it
+    children:
+      - file: content/demo/try-an-assignment.md
+      # The demo assignment opens in the workbench drawer and runs in the
+      # reader's browser. It carries no `grader-server` key, so it is a real
+      # student notebook with no grading server behind it: Check runs, nothing
+      # is submitted anywhere.
+        assignment: content/demo/assignment.py
+      - file: content/demo/what-the-instructor-wrote.md
+
+  - section: How it works
+    children:
+      - file: content/how-it-works/concepts.md
+      - file: content/how-it-works/life-of-a-submission.md
+      - file: content/how-it-works/grading-engine.md
+
   - section: For students
     children:
       - file: content/students/open-an-assignment.md
       - file: content/students/sign-in-and-submit.md
+      - file: content/students/feedback-and-grades.md
 
   - section: For instructors
     children:
@@ -47,12 +66,24 @@ toc:
       - file: content/instructors/canvas-export.md
       - file: content/instructors/change-log.md
 
-  - section: For operators
+  - section: Authentication
     children:
+      - file: content/auth/index.md
+      - file: content/auth/notebook-sign-in.md
+      - file: content/auth/saml.md
+      - file: content/auth/email-links.md
+      - file: content/auth/sessions-and-tokens.md
+
+  - section: Deploy and operate
+    children:
+      - file: content/operators/overview.md
       - file: content/operators/deploy.md
-      - file: content/operators/single-sign-on.md
-      - file: content/operators/security-model.md
+      - file: content/operators/email-delivery.md
+      - file: content/operators/sandbox-and-data.md
+      - file: content/operators/staging.md
       - file: content/operators/backups-and-upgrades.md
+      - file: content/operators/troubleshooting.md
+      - file: content/operators/security-model.md
 
   - section: Reference
     children:
@@ -61,4 +92,3 @@ toc:
       - file: content/reference/notebook-metadata.md
       - file: content/reference/api.md
       - file: content/reference/design.md
-      - file: content/reference/mograder.md

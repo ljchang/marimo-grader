@@ -1,6 +1,7 @@
 # marimo-grader
 
-**Documentation:** https://marimograder.org/ (students, instructors, operators, reference).
+**Documentation:** https://marimograder.org/ — including a
+[live demo assignment](https://marimograder.org/demo/try-an-assignment/) that runs in the browser.
 
 The documentation and the [DartBrains](https://dartbrains.org) course book are built with
 [marimo-book](https://marimobook.org) ([source](https://github.com/ljchang/marimo-book)), which
@@ -12,7 +13,9 @@ inside the notebook, and click **Submit**. Instructors and TAs grade in a web ap
 to Canvas.
 
 The design document is in [`docs/design.html`](docs/design.html); the API contract is in
-[`docs/api.md`](docs/api.md).
+[`docs/api.md`](docs/api.md). Deployment lives on the site:
+[Overview](https://marimograder.org/operators/overview/) and
+[Deploy](https://marimograder.org/operators/deploy/).
 
 ```
 backend/   FastAPI service + worker  (Python, PostgreSQL, SQLAlchemy 2, Alembic, python3-saml)
@@ -137,8 +140,8 @@ The grading engine is [MoGrader](https://github.com/jameskermode/mograder) by Ja
 (University of Warwick, MIT license): its authoring markers, `check()` runtime, cell-hash
 integrity check, hidden-test reinjection, and sandboxed runner do the actual autograding here.
 marimo-grader uses it as a library and contributes fixes upstream rather than forking it.
-See [Built on MoGrader](https://marimograder.org/reference/mograder/) for what is used and the
-behaviors worth knowing. The documentation and the DartBrains course book are built with
+See [The grading engine](https://marimograder.org/how-it-works/grading-engine/) for what is used
+and the behaviours worth knowing. The documentation and the DartBrains course book are built with
 [marimo-book](https://marimobook.org), and the whole system exists because of
 [marimo](https://marimo.io).
 

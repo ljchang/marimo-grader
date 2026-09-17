@@ -1,12 +1,12 @@
 # Author an assignment
 
-For instructors and TAs writing assignments. An assignment is one marimo notebook that contains the solutions, the tests, and the marks; the grader derives the student version from it.
+For instructors and TAs writing assignments. An assignment is **one notebook** containing the solutions, the tests and the marks; the student version is derived from it, never written by hand.
+
+If you have not seen the two side by side, start with [What the instructor wrote](../demo/what-the-instructor-wrote.md) — it is this page's content as a worked example, and the [file it is built from](https://github.com/ljchang/marimo-grader/blob/main/docs/examples/reaction-times.py) is a reasonable thing to copy.
 
 ## Where instructor notebooks live
 
-Keep them in a private repository. They contain solutions and hidden tests, and the grader refuses to publish any file that still contains those markers. Nothing from the instructor notebook reaches a public site except the student version that publishing generates.
-
-A minimal layout:
+In a **private repository**. They contain solutions and hidden tests, and publishing refuses any file that still has those markers in it. Nothing from the instructor notebook reaches a public site except the student version publishing generates.
 
 ```
 assignments/
@@ -19,9 +19,11 @@ Edit with `uv run marimo edit --sandbox assignments/glm.py`.
 
 ## The notebook, cell by cell
 
-The conventions come from [MoGrader](https://github.com/jameskermode/mograder), James Kermode's autograder for marimo notebooks, which the grader uses for stripping solutions, restoring hidden tests, and running checks. Its [documentation](https://github.com/jameskermode/mograder#readme) covers the markers in more depth; [Built on MoGrader](../reference/mograder.md) lists the behaviors that matter here.
+The conventions come from the [grading engine](../how-it-works/grading-engine.md); its [documentation](https://github.com/jameskermode/mograder#readme) covers the markers in more depth.
 
-**Dependencies.** The PEP 723 block at the top is the environment contract: the same list builds the environment in MoLab, in the browser, on a cluster, on a laptop, and in the grader's sandbox. List everything the notebook imports, plus the two grading packages.
+### Dependencies
+
+The PEP 723 block at the top is the environment contract: the same list builds the environment in MoLab, in the browser, on a cluster, on a laptop and in the grading sandbox. List everything the notebook imports, plus the two grading packages.
 
 ```python
 # /// script
@@ -30,7 +32,11 @@ The conventions come from [MoGrader](https://github.com/jameskermode/mograder), 
 # ///
 ```
 
-**Grader and sign-in.** One cell creates the client; it reads the assignment's identity from the metadata that publishing adds.
+Keep it lean. Every package here is installed in the grading sandbox for every distinct dependency list, and a heavy list makes the first submission after each publish slower.
+
+### Grader and sign-in
+
+One cell creates the client; it reads the assignment's identity from the metadata publishing adds.
 
 ```python
 @app.cell
@@ -46,7 +52,9 @@ def _(g):
     return
 ```
 
-**Marks.** One cell lists every question and its points. Question ids are stable identifiers; the visible title can change, the id should not.
+### Marks
+
+One cell lists every question and its points. Ids are stable identifiers; the visible title can change, the id should not.
 
 ```python
 @app.cell
@@ -56,7 +64,9 @@ def _():
     return
 ```
 
-**Solutions.** Put the answer between solution markers. The student version replaces the block with `# YOUR CODE HERE` and assigns `...` to the variables the block defined.
+### Solutions
+
+Put the answer between solution markers. The student version replaces the block with `# YOUR CODE HERE`, and assigns `...` to the variables the block defined.
 
 ```python
 @app.cell
@@ -67,7 +77,9 @@ def _(np):
     return (boxcar,)
 ```
 
-**Checks.** A check cell names the question and lists conditions. The text after the colon becomes the question's title in the grader. Each condition is `(passes, message, weight)`. Put stricter conditions inside hidden-test markers; students see the visible ones, the grader runs both.
+### Checks
+
+A check cell names the question and lists conditions. The text before the first colon is the question id; the text after it becomes the title. Each condition is `(passes, message, weight)`. Put stricter conditions inside hidden-test markers: students see the visible ones, grading runs both.
 
 ```python
 @app.cell
@@ -89,18 +101,33 @@ def _(boxcar, g, mo, np):
     return
 ```
 
-The `mo.stop` guard matters: without it the student version raises on the `...` placeholders, which shows a traceback on the course website and in a fresh MoLab session before the student has done anything.
+/// admonition | The `mo.stop` guard is not optional
+    type: warning
 
-**Submit.** One button per question.
+Without it the student version raises on the `...` placeholders the moment it opens — a wall of tracebacks on your course website and in every fresh session, before the student has done anything. It is the single most common authoring mistake.
+///
+
+Write the messages for the student who is stuck, not for yourself. *"boxcar should have 100 time points"* is a hint; *"assertion failed"* is not.
+
+### Submit and feedback
+
+One of each per question. The feedback cell is optional but worth including: it shows the score and comments in the notebook once grading is done, so the student does not have to leave to find out how they did.
 
 ```python
 @app.cell
 def _(g):
     g.submit_button("glm-q01")
     return
+
+@app.cell
+def _(g):
+    g.feedback("glm-q01")
+    return
 ```
 
-**Written answers.** A text box's value is not part of the notebook file, so pass it as an output. It is stored with the attempt and shown to the grader beside the rendered notebook.
+### Written answers
+
+A text box's value is not part of the notebook file, so pass it as an output. It is stored with the attempt and shown to the grader beside the rendered notebook.
 
 ```python
 @app.cell
@@ -115,24 +142,52 @@ def _(answer, g):
     return
 ```
 
-A question with no check is graded by hand. A question with a check is autograded; you can also make it hybrid (part automatic, part by hand) when you publish.
+Forget `outputs=` and the question submits an empty answer, which is the kind of mistake you find out about while grading.
 
 ## Grading modes
 
 | Mode | Set by | Score |
 |---|---|---|
 | auto | a `g.check` exists for the question id | weighted fraction of conditions passed, times the question's points |
-| manual | no check, or `--manual qid` at publish | entered by a person in the grading queue |
-| hybrid | `--hybrid qid=auto_points` at publish | automatic part plus a manual part |
+| manual | no check, or `--manual qid` at publish | entered by a person in the [grading queue](grading.md) |
+| hybrid | `--hybrid qid=auto_points` at publish | the automatic part plus a manual part |
 
-## Validate before publishing
+Hybrid is how you say *five points for running, five for explaining it*.
 
-The publish command refuses a notebook with invalid markers or leaked solutions, but it is faster to catch problems locally:
+## Designing questions that autograde well
 
-- Run the instructor notebook once; every check should pass.
-- Generate the student version and run it; every check cell should stop with the guard message and nothing should raise. From the grader's `backend` directory: `uv run grader publish --help` shows the flags, and `--student` lets you publish a student notebook you generated yourself.
-- Keep computations light. The grader runs each submission in a sandbox with a time limit (five minutes by default) and no network, so any dataset must be small or pre-cached on the worker.
+**One `check()` per question.** Marks are summed per id, so a second call with the same id makes the question count twice.
+
+**Check the thing, not the path to it.** A condition on a returned value lets a student solve it their own way; a condition on a variable name they were never told about fails people who were right.
+
+**Give partial credit deliberately.** Weights are the mechanism — a shape check worth 1 and a values check worth 3 turns a near-miss into a 25 % rather than a 0.
+
+**Use hidden tests for generality, not for surprises.** The good use is an edge case that a solution fitted to the visible examples would miss. The bad use is a condition the student had no way to anticipate.
+
+**Guard every check.** See above.
+
+**Keep it fast.** Each submission runs in a sandbox with a five-minute wall clock and no network. If a notebook takes minutes, the deadline hour will be unpleasant — subsample, precompute, or move the expensive part out of the graded path.
+
+## Validate before you publish
+
+Publishing refuses a notebook with invalid markers or leaked solutions, but catching it locally is faster:
+
+1. **Run the instructor notebook.** Every check should pass. If yours does not, the answer key is wrong.
+2. **Generate the student version and run that.** Every check cell should stop with its guard message and **nothing should raise**. This is the run that catches a missing `mo.stop`.
+3. **Read the messages** as a stuck student would.
+
+`uv run grader publish --help` lists the flags; `--student` lets you publish a student notebook you generated yourself.
 
 ## Datasets
 
-The sandbox has no network. An assignment that needs data from Hugging Face reaches it through `dartbrains_tools.data.localizer`, and the operator warms the worker's cache before grading with `grader warm-cache`, which reads the published notebook's own `get_file`/`download` calls -- so you do not have to list anything. If your notebook builds a path at run time, where that scan cannot see it, list it in the assignment's `required_datasets` setting as `"<repo_id> <filename>"` instead. Either way, ask the operator to re-run the warm step after you publish, or the first submission will fail with a grader error rather than a zero.
+The grading sandbox has **no network**, so an assignment can only read data that is already cached on the worker.
+
+Assignments that fetch data through `dartbrains_tools.data.localizer` are handled automatically: the operator runs `grader warm-cache`, which reads the published notebook's own `get_file`/`download` calls — you do not have to list anything. If your notebook builds a path at run time, where that scan cannot see it, list it in the assignment's `required_datasets` setting as `"<repo_id> <filename>"`.
+
+Either way: **tell your operator to re-run the warm step after you publish.** Otherwise the first submission fails with a grader error rather than a zero — recoverable, but only after somebody notices. They can confirm with `grader warm-cache --check --slug <your-slug>`, which downloads nothing and exits non-zero if anything is missing.
+
+Keep the data small. A per-condition beta image is about 2 MB; raw preprocessed BOLD is about 57 MB per subject.
+
+## Test it as a student
+
+Staff can submit, so do. Publish to your offering, open the student notebook the way your class will, sign in, answer a question wrongly, submit, read the feedback, then answer it correctly and submit again. Twenty minutes, and it catches the things this page cannot tell you about your own assignment.
