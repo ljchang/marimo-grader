@@ -29,6 +29,6 @@ The **Teaching staff** form on the roster page adds a TA or a co-instructor by N
 
 - An **instructor** sees and can change everything in the offering.
 - A **TA** can view submissions and grade. Leave the sections field empty to let them grade the whole class, or list section names to restrict them to those sections: they will not see other sections' students, submissions, or history.
-- Whether a TA's scores are released to students directly is an offering setting (`ta_can_finalize`, on by default).
+- Whether a TA may mark a grade **final** is an offering setting (`ta_can_finalize`, on by default). Turning it off does not hide their marking: a TA can still save a provisional score, which the student sees labelled as provisional. It reserves the act of finalising for an instructor.
 
 Only platform administrators can create courses and offerings and name the first instructor. After that, instructors manage their own staff.

@@ -58,13 +58,13 @@ The **grade policy** decides which attempt counts:
 | `latest` (default) | the most recent attempt |
 | `highest` | the attempt with the highest total |
 | `first` | the first attempt |
-| `selected` | the one an instructor pinned on the student's history page |
+| `selected` | the one an instructor pinned on the student's history page; falls back to the latest until something is pinned |
 
 `attempts_allowed` caps how many a student may make per question; unlimited by default.
 
 ## Artifact
 
-Notebooks, rendered HTML and roster uploads are stored as **artifacts**: files addressed by the hash of their content. Two students who submit byte-identical notebooks occupy one artifact; a submission's bytes cannot change without changing its address. The database holds the metadata and points at these.
+Notebooks, rendered HTML and roster uploads are stored as **artifacts**: files addressed by the SHA-256 of their content. Identical bytes are written to disk once, however many submissions point at them, and a submission's bytes cannot change without changing its address. The database holds the metadata and points at these.
 
 ## Run
 
@@ -77,7 +77,7 @@ Runs can fail independently and be retried, which is why "the autograder could n
 
 ## Score, release, audit
 
-A **score** is a record, not a field — every save writes a new one, so a grade has a history. A score can be **released** to the student or held as a draft.
+A **score** is a record, not a field — every save writes a new one, so a grade has a history. A score is either **final** or **provisional**; both are visible to the student, and provisional means the grader has said it may still change.
 
 Every action that could change a grade or who is in the course appends to the **audit trail**: who, when, before, after, and a reason if one was given. It is append-only and visible to instructors as the [change log](../instructors/change-log.md).
 

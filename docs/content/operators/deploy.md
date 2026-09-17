@@ -137,11 +137,13 @@ Or do it from the command line, which is also how you get going before sign-in i
 ```bash
 docker compose -f docker-compose.prod.yml run --rm web grader seed \
     --course neuroimaging --title "Introduction to Neuroimaging Analysis" \
-    --term 2026-fall --instructor <netid>
+    --term 2026-fall --instructor <netid> --students
 
 docker compose -f docker-compose.prod.yml run --rm web grader token <netid> \
     --offering neuroimaging/2026-fall --role instructor --admin
 ```
+
+The trailing `--students` with nothing after it matters: `seed` defaults to two example students, and an empty list is how you say *no students* on a real server. Real ones arrive by [roster import](../instructors/roster-and-staff.md).
 
 That token is valid eight hours and lets an instructor publish from their laptop without a browser:
 

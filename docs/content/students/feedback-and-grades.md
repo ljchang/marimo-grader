@@ -17,12 +17,12 @@ This is the one that matters at the end of term. A MoLab session can be deleted,
 | You see | It means |
 |---|---|
 | A score | graded, and released to you |
-| *waiting for grade* | submitted; a person has not read it yet, or has not released it |
+| *waiting for grade* | submitted; a person has not read it yet |
 | *grading* | the automatic run is still going, normally under a minute |
 | *failed* | the grader could **not run** your notebook. Not a zero — a problem for your instructor, who has a Retry button |
 | A dash | nothing submitted for that question |
 
-A score that exists but has not been released is not shown to you at all: it looks like *waiting*. Instructors do this while grading a whole class, so that everybody's marks appear at once.
+A score your instructor saved without releasing still reaches you: the portal shows it like any other, and the notebook labels it *Provisional score; a final grade may follow.* Treat a provisional mark as exactly that — it can change before it is finalised.
 
 ## Reading autograded feedback
 

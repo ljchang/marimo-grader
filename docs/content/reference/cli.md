@@ -50,7 +50,9 @@ Run it after every deploy and after publishing an assignment that touches new da
 
 ## `grader seed`
 
-Create a course, an offering, an instructor — also made a platform admin — and optional students in an empty database. Idempotent.
+Create a course, an offering, an instructor — also made a platform admin — and optional students. Idempotent.
+
+Every flag has a default, including `--students`, which defaults to two example NetIDs. On a real server pass `--students` with nothing after it, or you will create them.
 
 ```
 grader seed [--course SLUG] [--title TITLE] [--term TERM]
