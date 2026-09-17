@@ -354,7 +354,8 @@ export interface StaffAdd {
 
 export interface RosterEnrollment extends RosterRow {
   role: Role;
-  active?: boolean;
+  /** Soft drop keeps the row; this is what says whether they are still enrolled. */
+  status: 'active' | 'dropped';
 }
 
 export interface Course {
