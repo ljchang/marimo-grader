@@ -69,7 +69,9 @@ docker compose -f docker-compose.prod.yml run --rm web grader token f00abc1 \
     --offering neuroimaging/2026-fall --role instructor --admin
 ```
 
-Both work in every auth mode, including `disabled`. Publishing from CI uses the second one (`grader publish --token`). A login-link code is deliberately not usable as a device code, and a device code is not usable as a login link; they are separate kinds in the same table and each path refuses the other's rows.
+Both work in every auth mode, including `disabled`. Publishing from CI uses the second one (`grader publish --token`).
+
+Login-link codes and device codes are separate kinds of row in the same table, told apart by the client string recorded when they are minted — which is also what lets the audit trail distinguish an operator handing over a link from a student requesting one. `/auth/exchange` accepts only login-link rows.
 
 ## Sessions in a hurry
 
