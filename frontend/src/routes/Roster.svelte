@@ -306,14 +306,14 @@
         <thead><tr><th>NetID</th><th>Name</th><th>Section</th><th>Role</th><th></th></tr></thead>
         <tbody>
           {#each roster as r (r.netid)}
-            <tr class:inactive={r.active === false}>
+            <tr class:inactive={r.status !== 'active'}>
               <td class="mono">{r.netid}</td>
               <td class="wrap">{r.display_name}</td>
               <td>{r.section ?? '—'}</td>
-              <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}{#if r.active === false}<span class="muted"> (dropped)</span>{/if}</td>
+              <td>{r.role === 'ta' ? 'Teaching assistant' : r.role === 'instructor' ? 'Instructor' : 'Student'}{#if r.status !== 'active'}<span class="muted"> (dropped)</span>{/if}</td>
               <td class="rowacts">
                 {#if r.role === 'student'}<a href="/o/{offeringId}/students/{r.netid}">Submissions</a>{/if}
-                {#if r.active !== false}
+                {#if r.status === 'active'}
                   <button class="linkish" onclick={() => drop(r.netid, r.role)} disabled={dropping === r.netid}>
                     {dropping === r.netid ? 'Removing…' : 'Remove'}
                   </button>

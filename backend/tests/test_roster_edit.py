@@ -83,6 +83,10 @@ def test_drop_is_soft(client, seed):
         e = db.scalar(select(Enrollment).where(Enrollment.user_id == u.id))
         assert e is not None, "the row must survive: submissions reference it"
         assert e.status == EnrollmentStatus.dropped
+    # The listing has to say so too: a soft drop leaves the row in place, so
+    # "status" is the only thing that tells the roster page anything happened.
+    row = next(r for r in _roster(client, seed) if r["netid"] == "f00abc1")
+    assert row["status"] == "dropped"
 
 
 def test_drop_works_on_staff_too(client, seed):
