@@ -12,6 +12,13 @@ repo: https://github.com/ljchang/marimo-grader
 branch: main
 url: https://marimograder.org/
 
+# Borrowed from marimo-book until the grader has a mark of its own: the icon is
+# already #6366f1, the primary below, so it matches the palette exactly. Both
+# projects are MIT and by the same author. Swap both files to rebrand -- nothing
+# else refers to them.
+logo: images/marimo-book-icon.svg
+favicon: images/marimo-book-favicon.svg
+
 # Same palette and type as marimobook.org so the two projects read as a family.
 theme:
   palette:
