@@ -33,7 +33,13 @@ dependencies:
   mode: env
 
 toc:
+  # Without an explicit title MkDocs takes the nav label from the page's first
+  # H1, so the sidebar reads "marimo-grader" directly under the site name.
+  # (It only falls back to "Home" when it finds no H1 at all, which is what
+  # happens on books that leave launch_buttons on: the button markup lands
+  # above the heading and hides it.)
   - file: content/index.md
+    title: Home
 
   - section: Try it
     children:
