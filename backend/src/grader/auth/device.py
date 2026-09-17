@@ -23,6 +23,15 @@ from grader.models import DeviceCode, User, utcnow
 
 _ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 
+LOGIN_LINK_TTL = 1800
+
+# Pre-approved single-use codes that ``/auth/exchange`` turns into a session.
+# The client string records how the code reached its owner, so the audit trail
+# can tell an operator handing over a link from a student requesting one.
+OPERATOR_LOGIN_CLIENT = "operator-login-link"
+EMAIL_LOGIN_CLIENT = "email-login-link"
+LOGIN_LINK_CLIENTS = frozenset({OPERATOR_LOGIN_CLIENT, EMAIL_LOGIN_CLIENT})
+
 
 def _user_code() -> str:
     raw = "".join(secrets.choice(_ALPHABET) for _ in range(8))
@@ -76,7 +85,7 @@ def approve(db: Session, user_code: str, user: User) -> DeviceCode | None:
 
 def poll(db: Session, device_code: str) -> dict:
     row = db.scalar(select(DeviceCode).where(DeviceCode.device_code_hash == _hash(device_code)))
-    if row is None or row.consumed_at is not None or row.client == "operator-login-link":
+    if row is None or row.consumed_at is not None or row.client in LOGIN_LINK_CLIENTS:
         return {"status": "expired"}  # login-link codes are for /auth/exchange only
     if _aware(row.expires_at) < datetime.now(UTC):
         return {"status": "expired"}
@@ -94,16 +103,6 @@ def poll(db: Session, device_code: str) -> dict:
         "expires_in": ttl,
         "netid": user.netid,
     }
-
-
-LOGIN_LINK_TTL = 1800
-
-# Pre-approved single-use codes that ``/auth/exchange`` turns into a session.
-# The client string records how the code reached its owner, so the audit trail
-# can tell an operator handing over a link from a student requesting one.
-OPERATOR_LOGIN_CLIENT = "operator-login-link"
-EMAIL_LOGIN_CLIENT = "email-login-link"
-LOGIN_LINK_CLIENTS = frozenset({OPERATOR_LOGIN_CLIENT, EMAIL_LOGIN_CLIENT})
 
 
 def mint_login_code(
