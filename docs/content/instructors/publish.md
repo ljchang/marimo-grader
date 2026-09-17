@@ -16,7 +16,7 @@ uv run grader publish assignments/glm.py \
 - `--offering` is the course slug and term, `course/term`. The offering must exist (an administrator creates it) and you must be one of its instructors.
 - `--slug` names the assignment inside the offering. Reuse the same slug to publish a new version.
 - `--manual qid` and `--hybrid qid=auto_points` override the grading mode for a question.
-- `--token` skips interactive sign-in; see [Single sign-on](../operators/single-sign-on.md) for when you would need one.
+- `--token` skips interactive sign-in; see [Sessions and tokens](../auth/sessions-and-tokens.md#operator-sign-in) for when you would need one.
 
 Without `--token`, the command opens your browser for the same sign-in handshake students use.
 
@@ -37,6 +37,17 @@ A version is immutable. Every submission records which version the student opene
 Two things do not create a version: publishing identical content (the grader answers *unchanged*), and changing question titles, which update in place.
 
 Removing a question in a new version does not break older copies: submissions from version N for that question are still accepted and graded.
+
+## Check it as a student before the class does
+
+Staff can submit, which exists precisely so you can rehearse the thing your students will do:
+
+1. Open the published student notebook the way your class will — from the course page, in MoLab or the browser.
+2. Sign in, answer one question **wrongly**, and submit. Read the feedback.
+3. Answer it correctly and submit again. Confirm the score and the attempt count.
+4. If the assignment reads data, ask your operator to run `grader warm-cache --check --slug <slug>` first. A cold cache turns every submission into a [grader failure](grading.md#retrying-failed-grading) rather than a zero.
+
+Twenty minutes, and it catches what no amount of reading can.
 
 ## Keeping the course website in step
 

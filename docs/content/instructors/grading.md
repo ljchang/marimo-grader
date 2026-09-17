@@ -29,9 +29,19 @@ The rendered notebook fills the left pane; the right pane holds the score, the f
 
 The left pane is the student's notebook, rendered by the grader after execution, with the outputs they saw. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 
-The right pane holds the score. If the question has a rubric, each item has its own points and the total sums them; you can override the total. Feedback is a free text box the student sees. **Release this grade to the student** is on by default; untick it to save a draft score.
+The right pane holds the score. If the question has a rubric, each item has its own points and the total sums them; you can override the total. Feedback is a free text box the student sees.
+
+/// admonition | "Release this grade to the student" does not withhold it
+    type: warning
+
+The checkbox is on by default. Unticking it marks the score **provisional**, not private: the student portal still shows the points and the feedback, and the notebook adds *Provisional score; a final grade may follow.*
+
+So an unreleased score is a score the student can see and you have said you may change — not a draft they cannot. If you need marks to stay invisible until the whole class is graded, do not save them yet.
+///
 
 Keyboard: `j` and `k` move between students, `f` jumps to the feedback box, and `Cmd+Enter` (or `Ctrl+Enter`) saves. New submissions that arrive while you grade are added to the end of the queue without moving you.
+
+Staff can submit to their own offering, so an instructor's test submissions appear here too — that is the intended way to rehearse an assignment before releasing it.
 
 ## How a score becomes a grade
 
