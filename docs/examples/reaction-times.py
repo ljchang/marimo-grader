@@ -186,17 +186,18 @@ def _(g, mean_rt, mo):
         [
             (isinstance(mean_rt, (int, float)), "mean_rt should be a number", 1),
             (
-                isinstance(mean_rt, (int, float)) and abs(mean_rt - 417.9) < 0.05,
-                "mean_rt should be 417.9 — the mean of the eleven trials Q1 keeps, to one "
-                "decimal place",
+                isinstance(mean_rt, (int, float)) and abs(mean_rt - 417.9) < 0.6,
+                "mean_rt should be about 418 — the mean of the eleven trials Q1 keeps, not "
+                "of all fourteen",
                 2,
             ),
             ### BEGIN HIDDEN TESTS
-            # Catches the mean of all fourteen trials (697.4), which the visible
-            # tolerance already excludes, and any hard-coded 417.9 that ignores TRIALS.
+            # The visible condition accepts anything near 418, so it passes an
+            # unrounded 417.90909... and a rounded-to-integer 418. This one asks
+            # for the rounding the question specified, which nothing visible does.
             (
-                isinstance(mean_rt, (int, float)) and abs(mean_rt - 697.4) > 1,
-                "mean_rt should come from the trimmed trials, not all fourteen",
+                isinstance(mean_rt, (int, float)) and abs(mean_rt - 417.9) < 0.005,
+                "round to one decimal place, as the question asks",
                 1,
             ),
             ### END HIDDEN TESTS
