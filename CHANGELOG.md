@@ -13,6 +13,29 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-09-18
+
+### Added
+
+- **Storage broker (service).** A signed-in notebook can ask the grader for
+  storage credentials: `POST /offerings/{id}/storage/session` returns two
+  Cloudflare R2 temporary credentials scoped to exactly the prefixes the
+  enrollment may reach — course data, released assignments and the shared
+  cache read-only; the student's own area, group folders and private cache
+  read-write; staff additionally the student areas they may grade.
+  `POST …/storage/presign` gives a single presigned URL for runtimes that
+  cannot sign requests, `GET …/storage/me` the mount table without minting.
+  The grader stays in the control path only; bytes flow between the
+  notebook and R2 directly. Student prefixes are an HMAC of the NetID, so a
+  listing never exposes the roster. Assignments gain optional `release_at`
+  and `close_at` settings; outside that window the prefix is absent from
+  every credential, so pre-release data is unreachable rather than hidden.
+  Off until `GRADER_STORAGE_ENABLED` and the Cloudflare values are set;
+  see the configuration reference and `docs/storage-architecture.md`.
+- New tables `groups`, `group_members` and the append-only
+  `storage_grants` audit (migration `b7c2e9d41f03`).
+- `scripts/r2_spike.py`, the isolation experiment the design rests on.
+
 ## [0.1.1] — 2026-09-17
 
 ### Security
