@@ -358,7 +358,10 @@ function renderSignin(state) {
   const cred = currentToken(state);
   if (cred) {
     box.append(signedInLine(state, box, null, cred.netid));
-    setStatus(state.model, "approved", "");
+    // A token restored from localStorage must reach the kernel too: anything
+    // in Python that keys off `token` (dartbrains_tools.storage.connect) would
+    // otherwise see a signed-in button and an empty trait.
+    setModel(state.model, { token: cred.token, netid: cred.netid, status: "approved", message: "" });
   } else {
     box.append(signInButton(state, box, null));
   }

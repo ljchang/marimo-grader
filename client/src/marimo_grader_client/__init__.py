@@ -29,7 +29,7 @@ from marimo_grader_client.notebook import (
 )
 from marimo_grader_client.widget import GraderWidget
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 __all__ = [
     "Grader",

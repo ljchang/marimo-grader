@@ -13,6 +13,13 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Client 0.1.2:** a sign-in token restored from the browser's storage now
+  reaches the kernel as well. The widget showed "signed in" but left the
+  `token` trait empty, so Python code keyed off it -- the storage layer's
+  `connect()` -- saw nobody. Only a fresh click synced it.
+
 ## [0.1.2] — 2026-09-18
 
 ### Added
