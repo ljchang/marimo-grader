@@ -106,6 +106,47 @@ class Settings(BaseSettings):
     max_notebook_bytes: int = 2 * 1024 * 1024
     max_outputs_bytes: int = 8 * 1024 * 1024
 
+    # Storage broker (docs/storage-architecture.md). Off until every value is
+    # set. Two Cloudflare credentials: the R2 API token's S3 key pair is the
+    # *parent* every student credential derives from (bucket-scoped, never
+    # leaves this box); the account API token is what may call the mint
+    # endpoint and needs the account-wide "Workers R2 Storage: Edit"
+    # permission -- the bucket-scoped variant is refused (§5.4).
+    storage_enabled: bool = False
+    cf_account_id: str | None = None
+    cf_api_token: str | None = None
+    r2_endpoint: str | None = None  # https://<account>.r2.cloudflarestorage.com
+    r2_bucket: str = "dartbrains"
+    r2_parent_access_key_id: str | None = None
+    r2_parent_secret_access_key: str | None = None
+    # Short enough that pulling an assignment or dropping a student bites
+    # within the hour; long enough that a lab session never expires mid-file.
+    storage_credential_ttl_seconds: int = 3600
+    storage_presign_max_seconds: int = 3600
+    # HMAC key behind the opaque per-student prefix ids. Rotating it moves every
+    # student to a fresh, empty prefix -- do that only between terms.
+    storage_uid_secret: str | None = None
+
+    @model_validator(mode="after")
+    def _storage_needs_every_value(self) -> Settings:
+        if not self.storage_enabled:
+            return self
+        missing = [
+            "GRADER_" + name.upper()
+            for name in (
+                "cf_account_id",
+                "cf_api_token",
+                "r2_endpoint",
+                "r2_parent_access_key_id",
+                "r2_parent_secret_access_key",
+                "storage_uid_secret",
+            )
+            if not getattr(self, name)
+        ]
+        if missing:
+            raise RuntimeError("GRADER_STORAGE_ENABLED=true requires " + ", ".join(missing))
+        return self
+
     @model_validator(mode="after")
     def _email_login_needs_a_transport(self) -> Settings:
         """A sign-in link nobody receives is worse than no button at all."""

@@ -88,6 +88,22 @@ Plain environment variables read by the worker process.
 | `GRADER_RENDER` | unset | set inside the render path so the notebook's sign-in and submit widgets draw as static placeholders |
 | `UV_CACHE_DIR`, `HF_HOME` | | package and dataset caches; mount them on persistent volumes |
 
+## Storage broker
+
+Off by default; see [the storage design](../../storage-architecture.md). When `GRADER_STORAGE_ENABLED` is true every other value here is required and the API refuses to start without them. The broker mints prefix-scoped, hour-long R2 credentials for signed-in notebooks; the parent credentials below never leave the server.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `GRADER_STORAGE_ENABLED` | `false` | the feature; the storage routes 404 when false |
+| `GRADER_CF_ACCOUNT_ID` | none | Cloudflare account id |
+| `GRADER_CF_API_TOKEN` | none | account API token with the **account-wide** *Workers R2 Storage: Edit* permission; the bucket-scoped variant is refused by Cloudflare (code 10000) |
+| `GRADER_R2_ENDPOINT` | none | `https://<account-id>.r2.cloudflarestorage.com` |
+| `GRADER_R2_BUCKET` | `dartbrains` | the one bucket every offering lives in, partitioned by prefix |
+| `GRADER_R2_PARENT_ACCESS_KEY_ID`, `GRADER_R2_PARENT_SECRET_ACCESS_KEY` | none | the R2 API token's S3 key pair (Object Read & Write, scoped to the bucket); every student credential derives from it |
+| `GRADER_STORAGE_CREDENTIAL_TTL_SECONDS` | 3600 | lifetime of a student credential; un-releasing an assignment or dropping a student takes effect within this |
+| `GRADER_STORAGE_PRESIGN_MAX_SECONDS` | 3600 | cap on presigned-URL lifetime |
+| `GRADER_STORAGE_UID_SECRET` | none | HMAC key behind the opaque per-student prefix ids; **rotating it moves every student to an empty prefix** |
+
 ## Deployment
 
 | Setting | Default | Meaning |
