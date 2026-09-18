@@ -180,7 +180,9 @@ class Assignment(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     # settings keys: due_at, late_policy, attempts_allowed (int|null), grade_policy
     # (latest|highest|first|selected), environments [..], log_checks (bool),
-    # canvas_assignment_id, required_datasets [..]
+    # canvas_assignment_id, required_datasets [..], release_at / close_at (ISO 8601;
+    # the window in which students may read assignments/<off>/<slug>/ in storage --
+    # absent means always)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     offering: Mapped[Offering] = relationship(back_populates="assignments")
@@ -408,4 +410,49 @@ class RosterUpload(Base):
     source: Mapped[str] = mapped_column(String(32))
     artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifacts.id"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Group(Base):
+    """A project group: its members share one writable storage prefix."""
+
+    __tablename__ = "groups"
+    __table_args__ = (UniqueConstraint("offering_id", "slug", name="uq_group_slug"),)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_id)
+    offering_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("offerings.id"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))  # becomes the prefix segment
+    name: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    members: Mapped[list[GroupMember]] = relationship(back_populates="group")
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+    __table_args__ = (UniqueConstraint("group_id", "enrollment_id", name="uq_group_member"),)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_id)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("groups.id"), index=True)
+    enrollment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("enrollments.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    group: Mapped[Group] = relationship(back_populates="members")
+    enrollment: Mapped[Enrollment] = relationship()
+
+
+class StorageGrant(Base):
+    """Append-only: which prefixes a session was handed, and for how long.
+
+    The credentials themselves are never stored. This is what an operator reads
+    when a student says "I never had access" or "someone else did".
+    """
+
+    __tablename__ = "storage_grants"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_id)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    offering_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("offerings.id"), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    prefixes_ro: Mapped[list] = mapped_column(JSON, default=list)
+    prefixes_rw: Mapped[list] = mapped_column(JSON, default=list)
+    ttl_seconds: Mapped[int] = mapped_column(Integer)
+    client: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

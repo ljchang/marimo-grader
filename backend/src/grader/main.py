@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from grader.api import admin, auth, grading, offerings, public, roster, submissions
+from grader.api import admin, auth, grading, offerings, public, roster, storage, submissions
 from grader.config import get_settings
 
 API_PREFIX = "/api/v1"
@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
         submissions.router,
         grading.router,
         roster.router,
+        storage.router,
         admin.router,
     ):
         app.include_router(r, prefix=API_PREFIX)
