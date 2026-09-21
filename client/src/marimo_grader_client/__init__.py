@@ -34,6 +34,8 @@ __version__ = "0.1.2"
 __all__ = [
     "Grader",
     "GraderWidget",
+    "assignment_card",
+    "storage",
     "check",
     "__version__",
     "build_payload",
@@ -297,3 +299,17 @@ class Grader:
             f"Grader(server={self.server!r}, assignment_version_id={self.assignment_version_id!r}, "
             f"offering_id={self.offering_id!r}, assignment_id={self.assignment_id!r})"
         )
+
+
+def __getattr__(name: str) -> Any:
+    # ``storage`` and ``assignment_card`` are imported on demand so that
+    # ``import marimo_grader_client`` stays as light as the widget needs.
+    if name == "storage":
+        import importlib
+
+        return importlib.import_module(f"{__name__}.storage")
+    if name == "assignment_card":
+        from .assignments import assignment_card
+
+        return assignment_card
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

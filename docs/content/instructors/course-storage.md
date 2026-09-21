@@ -23,16 +23,20 @@ A student's prefix is named by an opaque id (an HMAC of their NetID), so a listi
 The chapter side looks like this, and works the same for a reader who is not enrolled — they just never click the button and the chapter falls back to public data:
 
 ```python
+from marimo_grader_client import storage
+
 signin = storage.signin_button(); signin
 course = storage.course() if storage.connect(signin) else None
 ```
+
+The library learns which grader, course and term a notebook belongs to from the notebook's script block (`grader-server`, `grader-course`, `grader-term`, or the `[tool.grader]` table [marimo-book writes](https://marimobook.org/book_yml/)), or from `GRADER_SERVER` / `GRADER_COURSE` / `GRADER_TERM` in the environment. A course package can set defaults once with `storage.configure(server=...)`; DartBrains does that in `dartbrains_tools.storage`, which wraps this module.
 
 ## Putting class data in
 
 You do not need Cloudflare credentials. As an instructor your `storage.course()` mount is read-write, so from any signed-in notebook or a local Python session:
 
 ```python
-from dartbrains_tools import storage
+from marimo_grader_client import storage
 storage.signin()                                    # device sign-in, cached afterwards
 
 course = storage.course()

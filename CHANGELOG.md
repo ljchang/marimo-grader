@@ -13,6 +13,20 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Added
+
+- **Client 0.2.0: course storage in the notebook.** `marimo_grader_client.storage`
+  is the notebook side of the storage broker, moved here from
+  dartbrains-tools so any course on the grader gets it: `signin_button()` /
+  `connect()`, `course()`, `private()`, `group()`, `assignment(slug)`, a
+  durable `@cache`, `local_path()` for anything that wants a file. One
+  obstore store per mount with a self-renewing credential; the token is
+  cached where the runtime keeps things (`~/.config/marimo-grader`, or
+  molab's `.env`, which it recognises by its sandbox). `GRADER_*` names
+  throughout; `storage.configure(server=...)` for a course's default.
+  `assignment_card(slug)` links a chapter to its assignment on the grader.
+  dartbrains-tools 0.3 wraps this and keeps its imports working.
+
 ### Fixed
 
 - **Client 0.1.2:** a sign-in token restored from the browser's storage now

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "marimo-grader-client"
-version = "0.1.2"
+version = "0.2.0"
 description = "Notebook-side client for the dartbrains grader: sign-in, submit and feedback widgets for marimo"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,13 +13,18 @@ authors = [{ name = "Luke Chang", email = "luke.j.chang@dartmouth.edu" }]
 dependencies = [
     "anywidget>=0.9",
     "traitlets",
+    # marimo_grader_client.storage talks to R2 through obstore. It ships no
+    # Pyodide wheel, so the marker keeps it out of the browser (where storage
+    # is not available anyway); molab and local kernels get it.
+    "obstore>=0.6; sys_platform != 'emscripten'",
 ]
 
 [project.optional-dependencies]
 mograder = ["mograder>=0.3"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff"]
+# numpy/pandas/marimo: exercised by the storage tests (put/get by extension, the sign-in button).
+dev = ["pytest>=8", "ruff", "numpy", "pandas", "marimo>=0.21"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/marimo_grader_client"]
