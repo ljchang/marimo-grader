@@ -74,6 +74,7 @@ toc:
       - file: content/students/open-an-assignment.md
       - file: content/students/sign-in-and-submit.md
       - file: content/students/feedback-and-grades.md
+      - file: content/students/course-storage.md
 
   - section: For instructors
     children:

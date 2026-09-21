@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Keys the grader client understands, in normalized (snake_case) form.
-GRADER_KEYS = ("assignment_version_id", "offering_id", "assignment_id", "server")
+GRADER_KEYS = ("assignment_version_id", "offering_id", "assignment_id", "server", "course", "term")
 
 # MoGrader injects these into the ``# /// script`` block of student notebooks.
 MOGRADER_KEYS = (
@@ -32,6 +32,8 @@ _ENV_VARS = {
     "offering_id": "GRADER_OFFERING_ID",
     "assignment_id": "GRADER_ASSIGNMENT_ID",
     "server": "GRADER_SERVER",
+    "course": "GRADER_COURSE",
+    "term": "GRADER_TERM",
 }
 
 _KEY_ALIASES = {
@@ -44,6 +46,8 @@ _KEY_ALIASES = {
     "assignment_id": "assignment_id",
     "server": "server",
     "url": "server",
+    "course": "course",
+    "term": "term",
 }
 
 _SCRIPT_OPEN = "# /// script"

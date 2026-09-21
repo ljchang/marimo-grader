@@ -35,3 +35,7 @@ The client also accepts a `[tool.grader]` table with the same names minus the pr
 Publishing replaces any existing `grader-*` lines, so a notebook can be republished without accumulating stale keys. Everything else in the block is left as the author wrote it.
 
 When the grading worker prepares an environment it substitutes its own pinned requirement for `marimo-grader-client` and `mograder`, so grading always uses the versions the worker ships with.
+
+## Course and term
+
+`grader-course` / `grader-term` (or `course` / `term` under `[tool.grader]`) name the offering a notebook belongs to without pinning an id. `marimo-book sync-deps` writes them into every chapter from the book's `grader:` section; `marimo_grader_client.storage` uses them to pick the right enrollment, and `assignment_card()` to build links to the grader's assignment aliases. Environment: `GRADER_COURSE`, `GRADER_TERM`.
