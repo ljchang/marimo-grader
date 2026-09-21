@@ -82,6 +82,7 @@ toc:
       - file: content/instructors/roster-and-staff.md
       - file: content/instructors/grading.md
       - file: content/instructors/canvas-export.md
+      - file: content/instructors/course-storage.md
       - file: content/instructors/change-log.md
 
   - section: Authentication
@@ -98,6 +99,7 @@ toc:
       - file: content/operators/deploy.md
       - file: content/operators/email-delivery.md
       - file: content/operators/sandbox-and-data.md
+      - file: content/operators/storage.md
       - file: content/operators/staging.md
       - file: content/operators/backups-and-upgrades.md
       - file: content/operators/troubleshooting.md
