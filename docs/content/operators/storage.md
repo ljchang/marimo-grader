@@ -1,6 +1,6 @@
 # Storage
 
-The storage broker lets signed-in notebooks read course data and keep their own files on Cloudflare R2, with credentials the grader mints per session and per prefix. It is off until every setting below is present. What instructors and students see is on [Course storage](../instructors/course-storage.md); the reasoning is in [the design document](../../storage-architecture.md).
+The storage broker lets signed-in notebooks read course data and keep their own files on Cloudflare R2, with credentials the grader mints per session and per prefix. It is off until every setting below is present. What instructors and students see is on [Course storage](../instructors/course-storage.md); the reasoning is in [the design document](https://github.com/ljchang/marimo-grader/blob/main/docs/storage-architecture.md).
 
 ## Why R2
 

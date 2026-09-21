@@ -2,7 +2,7 @@
 
 Students' notebooks can read the course's own data and keep their own files, with nothing to configure and no credential they can leak. The grader is what makes that safe: a signed-in notebook asks it for storage, and it hands back short-lived credentials that reach exactly the prefixes that enrollment is entitled to — nothing else in the bucket.
 
-This page is for instructors: what students get, how to put data in, and what the audit shows. The design is in [the storage design document](../../storage-architecture.md); the Cloudflare setup is in [Deploy and operate → Storage](../operators/storage.md).
+This page is for instructors: what students get, how to put data in, and what the audit shows. The design is in [the storage design document](https://github.com/ljchang/marimo-grader/blob/main/docs/storage-architecture.md); the Cloudflare setup is in [Deploy and operate → Storage](../operators/storage.md).
 
 ## What a student gets
 
