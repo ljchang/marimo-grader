@@ -111,3 +111,9 @@ Publishing (`POST .../versions`) is finalized server-side: the server injects `g
 ## Events
 
 - `GET /offerings/{offering_id}/events` → Server-Sent Events: `submission.received`, `submission.graded`, `score.updated`, each with `{"submission_id","question_id","netid"}`.
+
+## Storage (notebook token; 404 `storage_disabled` when the broker is off)
+
+- `GET /offerings/{offering_id}/storage/me` → `{"bucket", "mounts": [{"logical": "/private", "prefix": "users/<off>/<uid>/", "mode": "rw", "cred": "rw"}, …], "public": [{"logical": "/data/localizer", "backend": "hf", "repo": "dartbrains/localizer"}]}`. What the caller may reach, without minting anything.
+- `POST /offerings/{offering_id}/storage/session` `{"client": "dartbrains-tools/molab"}` → the same `mounts`/`public` plus `endpoint`, `bucket`, `region`, `expires_at` and `credentials: {"ro": {access_key_id, secret_access_key, session_token}, "rw": {…}}` — two Cloudflare R2 temporary credentials scoped to exactly the read-only and read-write prefixes in `mounts`. Recorded in `storage_grants`. 404 for non-members.
+- `POST /offerings/{offering_id}/storage/presign` `{"path": "/private/results/model.pkl", "method": "GET|HEAD|PUT", "expires": 900}` → `{"url", "key", "mount", "expires_in"}`. One presigned URL under the parent key, for runtimes that cannot sign requests. 403 outside the caller's mounts or for `PUT` on a read-only one; 400 for `..` or empty segments.
