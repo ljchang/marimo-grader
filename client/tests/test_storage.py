@@ -268,6 +268,157 @@ def test_cache_decorator_tiers(local_root):
 
 
 # --------------------------------------------------------------------------
+# cache_store(): the bucket behind mo.persistent_cache
+# --------------------------------------------------------------------------
+
+
+def test_cache_store_is_plain_disk_without_a_session(tmp_path, monkeypatch):
+    from marimo._save.stores import FileStore
+
+    monkeypatch.delenv("GRADER_STORAGE_ROOT", raising=False)
+    monkeypatch.delenv("GRADER_STORAGE", raising=False)
+    monkeypatch.delenv("GRADER_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))  # no cached token
+    monkeypatch.setenv("GRADER_RUNTIME", "local")
+    monkeypatch.setattr(
+        storage._notebook, "resolve_server", lambda s=None: "https://grader.example"
+    )
+    _state.reset()
+    assert isinstance(storage.cache_store(), FileStore)  # and it never prompted
+
+
+def test_cache_store_tiers_and_read_only_shared(local_root):
+    from marimo._save.stores import FileStore, TieredStore
+
+    from marimo_grader_client.storage._marimo_store import MountStore
+
+    store = storage.cache_store()
+    assert isinstance(store, TieredStore)
+    assert [type(s) for s in store.stores] == [FileStore, MountStore, MountStore]
+    assert [s.logical for s in store.stores[1:]] == ["/cache/shared", "/cache/private"]
+    assert [s.logical for s in storage.cache_store(shared=False).stores[1:]] == ["/cache/private"]
+
+    private = store.stores[2]
+    assert private.get("x/E_1.pickle") is None and not private.hit("x/E_1.pickle")
+    assert private.put("x/E_1.pickle", b"blob")
+    assert private.hit("x/E_1.pickle") and private.get("x/E_1.pickle") == b"blob"
+    assert storage.mount("/cache/private").exists("marimo/x/E_1.pickle")
+
+    # A student's shared tier: put declines quietly, so TieredStore logs nothing.
+    shared = store.stores[1]
+    shared.mount = Mount(
+        "/cache/shared", "cache/shared/", "r", shared.mount.fs, shared.mount.cache_root
+    )
+    assert shared.put("x/E_2.pickle", b"blob") is False
+
+
+_NOTEBOOK = """
+import marimo
+app = marimo.App()
+
+@app.cell
+def _():
+    import marimo as mo
+    import numpy as np
+    from marimo_grader_client import storage
+    return mo, np, storage
+
+@app.cell
+def _(mo, np, storage):
+    with mo.persistent_cache("slow", store=storage.cache_store()):
+        import pathlib
+        pathlib.Path("computed").touch()
+        result = np.arange(5) * 2
+    return (result,)
+
+if __name__ == "__main__":
+    app.run()
+"""
+
+
+def test_persistent_cache_restores_from_the_bucket_in_a_fresh_directory(local_root, tmp_path):
+    """Two sandboxes: the second has an empty __marimo__/ but restores from /cache/private."""
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "GRADER_STORAGE_ROOT": str(local_root)}
+    for name in ("first", "second"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "nb.py").write_text(_NOTEBOOK)
+        subprocess.run([sys.executable, "nb.py"], cwd=d, env=env, check=True, capture_output=True)
+    assert (tmp_path / "first" / "computed").exists()
+    assert not (tmp_path / "second" / "computed").exists(), "second sandbox recomputed"
+    blobs = list((local_root / "cache" / "users" / "me" / "marimo" / "slow").glob("*.pickle"))
+    assert len(blobs) == 1
+
+
+_TOKEN_NOTEBOOK = """
+import marimo
+app = marimo.App()
+
+@app.cell
+def _():
+    import types
+    import uuid
+    import marimo as mo
+    import numpy as np
+    from marimo_grader_client import storage
+    return mo, np, storage, types, uuid
+
+@app.cell
+def _(mo, uuid):
+    signin = mo.ui.text(value=str(uuid.uuid4()))  # a new "token" every run
+    return (signin,)
+
+@app.cell
+def _(signin, storage):
+    storage.connect(signin)
+    return
+
+@app.cell
+def _(np, types):
+    data = types.SimpleNamespace(a=np.ones(3))  # hashed by execution path, like BrainData
+    return (data,)
+
+@app.cell
+def _(data, mo, storage, types):
+    with mo.persistent_cache("first", store=storage.cache_store()):
+        mid = types.SimpleNamespace(a=data.a * 2)
+    return (mid,)
+
+@app.cell
+def _(mid, mo, storage):
+    with mo.persistent_cache("second", store=storage.cache_store()):
+        out = mid.a + 1
+    return (out,)
+
+if __name__ == "__main__":
+    app.run()
+"""
+
+
+def test_chained_cache_keys_ignore_the_signin_token(local_root, tmp_path):
+    """The pattern chapters use: cached cells call cache_store() and have no edge to
+    the sign-in cell, so a per-session token cannot reach marimo's key. (With an
+    edge, marimo hashes the button's value into every chained key.)"""
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "GRADER_STORAGE_ROOT": str(local_root)}
+    keys = []
+    for name in ("first_run", "second_run"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "nb.py").write_text(_TOKEN_NOTEBOOK)
+        subprocess.run([sys.executable, "nb.py"], cwd=d, env=env, check=True, capture_output=True)
+        keys.append(sorted(p.name for p in (d / "__marimo__" / "cache").rglob("*.pickle")))
+    assert len(keys[0]) == 2 and keys[0] == keys[1]
+
+
+# --------------------------------------------------------------------------
 # R2 session (no network: fake broker; obstore only for store construction)
 # --------------------------------------------------------------------------
 

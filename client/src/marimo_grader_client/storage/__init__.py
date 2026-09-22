@@ -18,6 +18,9 @@ each student's own space -- whichever backend holds it.
     @storage.cache
     def fit(subject): ...                      # computed once per argument set
 
+    with mo.persistent_cache("fit", store=storage.cache_store()):
+        betas = fit_all()                      # marimo's cache, kept in the bucket
+
 In a marimo notebook, prefer the button: it never blocks, and a reader who
 cannot sign in (not at Dartmouth) just keeps going with public data::
 
@@ -53,6 +56,7 @@ __all__ = [
     "assignment",
     "NoServer",
     "cache",
+    "cache_store",
     "configure",
     "connect",
     "course",
@@ -158,6 +162,18 @@ def signout() -> None:
 
 def whoami() -> str | None:
     return _state.broker().token.netid
+
+
+def cache_store(*, shared: bool = True):
+    """A store for ``mo.persistent_cache(..., store=storage.cache_store())``.
+
+    Local disk, then the instructor-warmed ``/cache/shared``, then your own
+    ``/cache/private``; plain local disk when there is no storage session.
+    See :mod:`marimo_grader_client.storage._marimo_store`.
+    """
+    from ._marimo_store import cache_store as _cache_store  # needs marimo
+
+    return _cache_store(shared=shared)
 
 
 def mounts() -> list[str]:

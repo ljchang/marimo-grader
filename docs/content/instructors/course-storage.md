@@ -15,6 +15,7 @@ One bucket holds everything, partitioned by prefix. A signed-in student's notebo
 | `storage.private()` | that student's own space | read, write | read (`/students`) |
 | `storage.group()` | a project group's space | members read, write | read, write |
 | `@storage.cache` | results computed once, reused later | own cache; reads a shared one | writes the shared one |
+| `storage.cache_store()` | the same, behind `mo.persistent_cache` | own cache; reads a shared one | writes the shared one |
 
 Public datasets — `storage.dataset("localizer")` and the existing `dartbrains_tools.data` loaders — stay on Hugging Face and need no sign-in.
 
