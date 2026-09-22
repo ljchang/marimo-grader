@@ -17,11 +17,13 @@ STATUSES = ("idle", "pending", "approved", "submitting", "done", "error")
 
 _ESM = r"""
 // marimo-grader-client widget. No dependencies. Every network call is made from the
-// student's browser with fetch(); the kernel never sees the token.
+// student's browser with fetch(). The kernel receives the token by message (for
+// course storage) but never through a synced trait; see memTokens below.
 
 const SUBMISSION_POLL_MS = 3000;
 const SUBMISSION_POLL_LIMIT_MS = 120000;
 const PAYLOAD_REFRESH_TIMEOUT_MS = 3000;
+const TOKEN_ACK_TIMEOUT_MS = 3000;
 
 // ---- small DOM helpers -----------------------------------------------------
 
@@ -114,15 +116,57 @@ function clearToken(server) {
   }
 }
 
+// The token never goes into a synced trait. marimo hashes a UI element's value
+// into the persistent-cache key of every cell downstream of it, so a token in
+// the widget's state would give each sign-in its own keys and no cache would
+// ever hit again. The kernel gets it by message instead (handToKernel), and
+// this module keeps a copy for submit/feedback widgets when localStorage is
+// unavailable (private mode, a sandboxed iframe).
+const memTokens = new Map();
+
 function currentToken(state) {
-  const token = state.model.get("token");
-  if (token) return { token, netid: state.model.get("netid") || "" };
-  return loadToken(state.server);
+  return memTokens.get(state.server) || loadToken(state.server);
+}
+
+function rememberToken(state, cred) {
+  memTokens.set(state.server, cred);
+  saveToken(state.server, cred);
 }
 
 function forgetToken(state) {
+  memTokens.delete(state.server);
   clearToken(state.server);
-  setModel(state.model, { token: "", netid: "" });
+  setStatus(state.model, "idle", "");
+}
+
+function handToKernel(state, cred) {
+  // Send the token, wait for the kernel to acknowledge it, *then* set
+  // status="approved" from here. The order matters twice over: marimo reruns
+  // cells only for value changes made in the browser (a trait the kernel sets
+  // re-renders nothing downstream), and a cell reacting to "approved" must find
+  // the token already stored. No kernel (a static page): approve on timeout.
+  const { model } = state;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try { model.off("msg:custom", handler); } catch { /* ignore */ }
+      setStatus(model, "approved", "");
+      resolve();
+    };
+    const handler = (msg) => {
+      if (msg && msg.type === "token-ok") finish();
+    };
+    try {
+      model.on("msg:custom", handler);
+      model.send({ type: "token", token: cred.token, netid: cred.netid || "" });
+    } catch {
+      finish();
+      return;
+    }
+    setTimeout(finish, TOKEN_ACK_TIMEOUT_MS);
+  });
 }
 
 // ---- API -------------------------------------------------------------------
@@ -258,8 +302,9 @@ async function signIn(state, container, onSignedIn) {
     }
     if (poll.status === "approved") {
       const expiresAt = new Date(Date.now() + (Number(poll.expires_in) || 28800) * 1000).toISOString();
-      saveToken(server, { token: poll.access_token, netid: poll.netid, expires_at: expiresAt });
-      setModel(model, { token: poll.access_token, netid: poll.netid, status: "approved", message: "" });
+      const cred = { token: poll.access_token, netid: poll.netid, expires_at: expiresAt };
+      rememberToken(state, cred);
+      await handToKernel(state, cred);  // before onSignedIn starts a submit
       clear(container);
       container.append(signedInLine(state, container, onSignedIn, poll.netid));
       if (onSignedIn) onSignedIn({ token: poll.access_token, netid: poll.netid });
@@ -358,10 +403,9 @@ function renderSignin(state) {
   const cred = currentToken(state);
   if (cred) {
     box.append(signedInLine(state, box, null, cred.netid));
-    // A token restored from localStorage must reach the kernel too: anything
-    // in Python that keys off `token` (dartbrains_tools.storage.connect) would
-    // otherwise see a signed-in button and an empty trait.
-    setModel(state.model, { token: cred.token, netid: cred.netid, status: "approved", message: "" });
+    // A token restored from localStorage must reach the kernel too, or
+    // storage.connect() would see a signed-in button and no token.
+    handToKernel(state, cred);
   } else {
     box.append(signInButton(state, box, null));
   }
@@ -634,8 +678,15 @@ class GraderWidget(anywidget.AnyWidget):
     """One widget, three modes: ``signin``, ``submit`` and ``feedback``.
 
     Traits synced to the browser are plain JSON. ``payload`` flows
-    Python -> JS (what to submit); ``token``/``netid``/``result``/``status``/
-    ``message`` flow JS -> Python so a notebook can react to them.
+    Python -> JS (what to submit); ``result``/``status``/``message`` flow
+    JS -> Python so a notebook can react to them.
+
+    The token is deliberately *not* a trait. marimo folds a UI element's value
+    into the ``mo.persistent_cache`` key of every cell downstream of it, so a
+    synced token would give each sign-in its own keys and nothing cached would
+    hit again. The browser sends it as a ``{"type": "token"}`` message instead,
+    kept on :attr:`token`/:attr:`netid`; the button's value is then the same for
+    every signed-in reader.
     """
 
     _esm = _ESM
@@ -647,8 +698,6 @@ class GraderWidget(anywidget.AnyWidget):
     question_id = traitlets.Unicode("").tag(sync=True)
     offering_id = traitlets.Unicode("").tag(sync=True)
     assignment_id = traitlets.Unicode("").tag(sync=True)
-    token = traitlets.Unicode("").tag(sync=True)
-    netid = traitlets.Unicode("").tag(sync=True)
     payload = traitlets.Dict().tag(sync=True)
     result = traitlets.Dict().tag(sync=True)
     status = traitlets.Enum(STATUSES, default_value="idle").tag(sync=True)
@@ -659,11 +708,22 @@ class GraderWidget(anywidget.AnyWidget):
     ) -> None:
         super().__init__(**kwargs)
         self._payload_factory = payload_factory
+        self.token = ""
+        self.netid = ""
         self.on_msg(self._on_custom_msg)
 
     def _on_custom_msg(self, _widget: Any, content: Any, _buffers: Any) -> None:
-        """JS asks for a fresh payload right before submitting."""
-        if not isinstance(content, dict) or content.get("type") != "refresh":
+        """``token``: the browser signed in. ``refresh``: rebuild the payload before a submit."""
+        if not isinstance(content, dict):
+            return
+        if content.get("type") == "token":
+            self.token = str(content.get("token") or "")
+            self.netid = str(content.get("netid") or "")
+            # The browser sets status="approved" on this ack: marimo reruns
+            # cells only for browser-side changes, and by then the token is here.
+            self.send({"type": "token-ok"})
+            return
+        if content.get("type") != "refresh":
             return
         if self._payload_factory is not None:
             try:

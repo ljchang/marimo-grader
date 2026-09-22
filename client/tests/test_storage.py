@@ -418,6 +418,71 @@ def test_chained_cache_keys_ignore_the_signin_token(local_root, tmp_path):
     assert len(keys[0]) == 2 and keys[0] == keys[1]
 
 
+_WIDGET_EDGE_NOTEBOOK = """
+import marimo
+app = marimo.App()
+
+@app.cell
+def _():
+    import types
+    import uuid
+    import marimo as mo
+    import numpy as np
+    from marimo_grader_client.widget import GraderWidget
+    return GraderWidget, mo, np, types, uuid
+
+@app.cell
+def _(GraderWidget, mo, uuid):
+    _w = GraderWidget(mode="signin", server="https://grader.example")
+    # What the browser does on approval: the token arrives by message.
+    _w._on_custom_msg(_w, {"type": "token", "token": str(uuid.uuid4()), "netid": "f00abc1"}, [])
+    _w.status = "approved"  # the browser's half, on the kernel's ack
+    signin = mo.ui.anywidget(_w)
+    return (signin,)
+
+@app.cell
+def _(signin):
+    signed_in = signin.value.get("status") == "approved"
+    return (signed_in,)
+
+@app.cell
+def _(np, signed_in, types):
+    data = types.SimpleNamespace(a=np.ones(3), signed_in=signed_in)  # an edge, like GLM's localizer_path
+    return (data,)
+
+@app.cell
+def _(data, mo, types):
+    with mo.persistent_cache("first"):
+        mid = types.SimpleNamespace(a=data.a * 2)
+    return (mid,)
+
+@app.cell
+def _(mid, mo):
+    with mo.persistent_cache("second"):
+        out = mid.a + 1
+    return (out,)
+
+if __name__ == "__main__":
+    app.run()
+"""
+
+
+def test_signin_button_value_keeps_cache_keys_stable_downstream(tmp_path):
+    """With the token delivered by message, even cells that depend on the button
+    get the same keys on every sign-in (on 0.2.1, with a synced token, they did not)."""
+    import subprocess
+    import sys
+
+    keys = []
+    for name in ("first_signin", "second_signin"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "nb.py").write_text(_WIDGET_EDGE_NOTEBOOK)
+        subprocess.run([sys.executable, "nb.py"], cwd=d, check=True, capture_output=True)
+        keys.append(sorted(p.name for p in (d / "__marimo__" / "cache").rglob("*.pickle")))
+    assert len(keys[0]) == 2 and keys[0] == keys[1]
+
+
 # --------------------------------------------------------------------------
 # R2 session (no network: fake broker; obstore only for store construction)
 # --------------------------------------------------------------------------

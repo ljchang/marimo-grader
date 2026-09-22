@@ -29,12 +29,13 @@ must come out the same in every sandbox or nothing ever hits. Two things break
 that (both verified on marimo 0.24):
 
 - ``Path(__file__)`` anywhere upstream: the notebook's absolute path is hashed.
-- Any dataflow path from a cached cell back to the sign-in button: marimo
-  re-hashes ancestor cells with their UI values, and the button's value is the
-  session token. So call ``storage.cache_store()`` in the ``with`` line and
-  do not make the cached cells (or the data they read) depend on the button or
-  on the cell that calls ``storage.connect(signin)``. This function opens the
-  session itself from a cached token, so it does not need that edge.
+- A per-session value upstream. marimo re-hashes ancestor cells *with their
+  UI values*, so a widget whose value carried the session token would give
+  every sign-in its own keys. Since client 0.2.2 the sign-in button delivers
+  the token by message and its value is the same for every signed-in reader,
+  so cached cells may depend on the button. (With client 0.2.1's button they
+  must not.) This function still opens the session itself from a cached
+  token, so a cell does not need that edge just to reach the bucket.
 """
 
 from __future__ import annotations
