@@ -38,7 +38,7 @@ with mo.persistent_cache("preprocess", store=storage.cache_store()):
     data = data.filter(...).smooth(6)
 ```
 
-It checks the local disk, then results your instructor computed ahead of time, then your own earlier runs, and only computes when none of them has it. Signed out, it is plain `mo.persistent_cache`. Call it in the `with` line and do not make that cell depend on the sign-in button: marimo would fold your sign-in into the cache key, and no later run would find the result.
+It checks the local disk, then results your instructor computed ahead of time, then your own earlier runs, and only computes when none of them has it. Signed out, it is plain `mo.persistent_cache`. Call it in the `with` line; it finds your sign-in on its own.
 
 ## Where it works
 

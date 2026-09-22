@@ -28,14 +28,34 @@ def test_traits_are_synced():
         "question_id",
         "offering_id",
         "assignment_id",
-        "token",
-        "netid",
         "payload",
         "result",
         "status",
         "message",
     ):
         assert GraderWidget.class_traits()[name].metadata.get("sync") is True
+
+
+def test_token_is_never_a_synced_trait():
+    """marimo hashes a UI element's value into downstream persistent-cache keys;
+    a synced token would make every sign-in its own cache."""
+    traits = GraderWidget.class_traits()
+    assert "token" not in traits and "netid" not in traits
+    import re
+
+    writes = re.findall(r"setModel\([^;]*", GraderWidget._esm)
+    assert writes and not [w for w in writes if "token" in w or "netid" in w]
+
+
+def test_token_arrives_by_message_and_is_acknowledged(monkeypatch):
+    w = GraderWidget(mode="signin")
+    sent = []
+    monkeypatch.setattr(w, "send", lambda content, buffers=None: sent.append(content))
+    w._on_custom_msg(w, {"type": "token", "token": "tok-abc", "netid": "f00abc1"}, [])
+    assert (w.token, w.netid) == ("tok-abc", "f00abc1")
+    assert sent == [{"type": "token-ok"}]  # the browser flips status on this ack
+    assert w.status == "idle"  # a kernel-side change would rerun nothing in marimo
+    assert "tok-abc" not in str(w.get_state())  # the synced state stays token-free
 
 
 def test_mode_and_status_are_validated():

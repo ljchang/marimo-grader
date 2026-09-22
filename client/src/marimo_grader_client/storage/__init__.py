@@ -127,8 +127,10 @@ def connect(button=None, *, offering: str | None = None, quiet: bool = False) ->
     if button is not None:
         val = getattr(button, "value", None) or {}
         raw = (
-            val.get("token")
-            or getattr(getattr(button, "widget", None), "token", "")
+            # The widget delivers the token by message onto `.widget.token`
+            # (client >= 0.2.2); `value["token"]` is the older synced trait.
+            getattr(getattr(button, "widget", None), "token", "")
+            or val.get("token")
             or getattr(button, "token", "")  # a bare GraderWidget, e.g. Grader().signin_button()
         )
         if raw:
