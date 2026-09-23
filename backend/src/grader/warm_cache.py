@@ -71,6 +71,7 @@ import subprocess
 from grader.db import get_sessionmaker
 from grader.models import Artifact, Assignment, Offering
 from grader.services.artifacts import store
+from grader.url_cache import data_urls, warm_urls
 from grader.worker.materialize import rewrite_dependencies
 from grader.worker.sandbox import prepare_env
 
@@ -240,6 +241,18 @@ def warm(args: argparse.Namespace) -> int:
                     print("    no instructor notebook stored; skipping")
                     continue
                 source = store().get(art).decode("utf-8", "replace")
+
+                # Plain-URL data files (pd.read_csv("https://...")): the HF cache
+                # never sees these. See grader.url_cache.
+                urls = data_urls(source)
+                if urls:
+                    present, missing = warm_urls(urls, check=args.check)
+                    print(
+                        f"{assignment.slug} (v{version.version}): {present}/{len(urls)} URL files present"
+                    )
+                    for miss in missing:
+                        print(f"    MISSING {miss}")
+                        failures += 1
 
                 refs = references(source) + declared(assignment)
                 if not refs:
