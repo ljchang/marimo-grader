@@ -170,6 +170,20 @@ def references(source: str) -> list[dict]:
             seen.add(key)
             refs.append(ref)
 
+    # Names the salary module goes by here: `salary`, or whatever it was imported
+    # as -- the assignments use `salary as salary_data`, since `salary` is their
+    # dataframe.
+    salary_names = {"salary"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "dartbrains_tools.data":
+            salary_names |= {a.asname or a.name for a in node.names if a.name == "salary"}
+        elif isinstance(node, ast.Import):
+            salary_names |= {
+                a.asname
+                for a in node.names
+                if a.name == "dartbrains_tools.data.salary" and a.asname
+            }
+
     literals: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -185,7 +199,7 @@ def references(source: str) -> list[dict]:
             if isinstance(receiver, ast.Attribute)
             else None
         )
-        if receiver == "salary" and node.func.attr == "get_file":
+        if receiver in salary_names and node.func.attr == "get_file":
             # dartbrains_tools.data.salary.get_file(name="salary.csv"): the
             # tutorials' CSVs, on HF since dartbrains-tools 0.3.1. A name that is
             # not a literal warms both tables.

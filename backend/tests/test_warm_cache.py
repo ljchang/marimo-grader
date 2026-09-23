@@ -104,3 +104,16 @@ def test_salary_name_that_is_not_a_literal_warms_both_tables():
     assert _downloads(HEADER + 'p = salary.get_file(name="salary.csv")\n') == {
         ("dartbrains/salary", "salary.csv")
     }
+
+
+def test_salary_module_imported_under_another_name():
+    """The assignments import it as salary_data: `salary` is their dataframe."""
+    src = (
+        HEADER
+        + "from dartbrains_tools.data import salary as salary_data\n"
+        + 'CSV_PATH = salary_data.get_file("salary_exercise.csv")\n'
+        + "salary = pd.read_csv(CSV_PATH)\n"
+    )
+    assert _downloads(src) == {("dartbrains/salary", "salary_exercise.csv")}
+    src2 = HEADER + "import dartbrains_tools.data.salary as sal\np = sal.get_file()\n"
+    assert _downloads(src2) == {("dartbrains/salary", "salary.csv")}
