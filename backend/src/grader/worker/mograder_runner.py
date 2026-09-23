@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from grader.models import Artifact, Submission
 from grader.services.artifacts import store
+from grader.url_cache import rewrite_urls
 from grader.worker.materialize import rewrite_dependencies
 
 TIMEOUT = int(os.environ.get("GRADER_AUTOGRADE_TIMEOUT", "300"))
@@ -59,6 +60,26 @@ class GradeResult:
 
 def _key(label: str) -> str:
     return label.split(":", 1)[0].strip()
+
+
+def nothing_ran_reason(result, auto_points_max: float) -> str | None:
+    """Why this run must fail rather than score, or None if it can be scored.
+
+    marimo finishes a notebook whose cells raised, so ``export_ok`` stays True and
+    the checks that depended on those cells are simply absent. For one question
+    that is the student's own broken answer and 0 is right. When *no check cell in
+    the whole notebook* ran, something every question needs failed -- data the
+    sandbox could not reach, a missing package -- and scoring it would give the
+    whole class 0 with empty feedback (the pandas and polars assignments,
+    September 2026). Fail the run instead so staff see it and can retry.
+    """
+    if auto_points_max <= 0 or result.checks:
+        return None
+    why = result.export_error or "no check cell ran"
+    return (
+        f"no check cell ran ({why}; {result.cell_errors} cell error(s)) -- the notebook "
+        "could not get far enough to grade, e.g. data it reads was not reachable offline"
+    )
 
 
 def grade(db: Session, sub: Submission) -> GradeResult:
@@ -102,6 +123,9 @@ def grade(db: Session, sub: Submission) -> GradeResult:
     from grader.worker.sandbox import prepare_env
 
     fixed = rewrite_dependencies(fixed)
+    # Data read from a plain URL: use the copy warm-cache fetched (the sandbox has
+    # no network). See grader.url_cache.
+    fixed = rewrite_urls(fixed)
     # Build (or reuse) the notebook's environment *outside* bubblewrap: inside the
     # sandbox the filesystem is read-only and there is no network, so marimo must
     # run with --no-sandbox against a prepared venv.
@@ -135,6 +159,9 @@ def grade(db: Session, sub: Submission) -> GradeResult:
         raise RuntimeError(f"notebook execution failed: {result.export_error[:1500]}")
 
     q = sub.question
+    nothing_ran = nothing_ran_reason(result, float(q.auto_points_max or 0))
+    if nothing_ran:
+        raise RuntimeError(nothing_ran)
     keys = set(q.check_keys or [q.qid])
     earned = total = 0.0
     lines: list[str] = []
