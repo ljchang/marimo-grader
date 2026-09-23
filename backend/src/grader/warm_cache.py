@@ -131,14 +131,20 @@ _HELPER_SCOPES = {
 }
 
 
+_SALARY_REPO = "dartbrains/salary"
+_SALARY_FILES = ("salary.csv", "salary_exercise.csv")
+
+
 def references(source: str) -> list[dict]:
     """Dataset references a notebook makes, derived from its own source.
 
-    Recognises four shapes:
+    Recognises five shapes:
 
     * ``localizer.get_file(subject, "<scope>", "<suffix>")`` with literal scope
       and suffix -- warmed for every subject, since assignments loop over them.
     * ``localizer.download("<repo_id>", "<filename>")``.
+    * ``salary.get_file("<name>")`` (dartbrains_tools.data.salary) -- a download
+      from ``dartbrains/salary``; both tables when the name is not a literal.
     * the ``localizer`` helpers that wrap ``get_file`` inside dartbrains_tools
       rather than in the notebook (``load_confounds``, ``load_events``). These are
       invisible to a scan of the notebook alone: a notebook calling
@@ -171,6 +177,31 @@ def references(source: str) -> list[dict]:
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         args = [a.value if isinstance(a, ast.Constant) else None for a in node.args]
+        receiver = node.func.value
+        receiver = (
+            receiver.id
+            if isinstance(receiver, ast.Name)
+            else receiver.attr
+            if isinstance(receiver, ast.Attribute)
+            else None
+        )
+        if receiver == "salary" and node.func.attr == "get_file":
+            # dartbrains_tools.data.salary.get_file(name="salary.csv"): the
+            # tutorials' CSVs, on HF since dartbrains-tools 0.3.1. A name that is
+            # not a literal warms both tables.
+            named = [
+                k.value.value
+                for k in node.keywords
+                if k.arg == "name" and isinstance(k.value, ast.Constant)
+            ]
+            name = (
+                args[0]
+                if args
+                else (named[0] if named else ("salary.csv" if not node.keywords else None))
+            )
+            for f in [name] if isinstance(name, str) else list(_SALARY_FILES):
+                add({"kind": "download", "repo_id": _SALARY_REPO, "filename": f})
+            continue
         if node.func.attr in _HELPER_SCOPES:
             scope, suffix = _HELPER_SCOPES[node.func.attr]
             add({"kind": "get_file", "scope": scope, "suffix": suffix})

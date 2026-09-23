@@ -75,3 +75,32 @@ def test_solution_only_access_is_why_the_instructor_copy_is_scanned():
     published = HEADER + "def _(localizer):\n    # YOUR CODE HERE\n    pass\n"
     assert "confounds" in _suffixes(instructor)
     assert references(published) == []
+
+
+def _downloads(src: str) -> set[tuple[str, str]]:
+    return {(r["repo_id"], r["filename"]) for r in references(src) if r["kind"] == "download"}
+
+
+def test_salary_tables_through_dartbrains_tools():
+    """The pandas/polars/plotting CSVs, since dartbrains-tools 0.3.1."""
+    src = (
+        HEADER
+        + "from dartbrains_tools.data import salary\n"
+        + 'df = pd.read_csv(salary.get_file("salary_exercise.csv"))\n'
+        + "raw = pl.read_csv(salary.get_file())\n"
+    )
+    assert _downloads(src) == {
+        ("dartbrains/salary", "salary_exercise.csv"),
+        ("dartbrains/salary", "salary.csv"),
+    }
+
+
+def test_salary_name_that_is_not_a_literal_warms_both_tables():
+    src = HEADER + "which = pick()\npath = salary.get_file(which)\n"
+    assert _downloads(src) == {
+        ("dartbrains/salary", "salary.csv"),
+        ("dartbrains/salary", "salary_exercise.csv"),
+    }
+    assert _downloads(HEADER + 'p = salary.get_file(name="salary.csv")\n') == {
+        ("dartbrains/salary", "salary.csv")
+    }
