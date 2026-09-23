@@ -75,10 +75,15 @@ def nothing_ran_reason(result, auto_points_max: float) -> str | None:
     """
     if auto_points_max <= 0 or result.checks:
         return None
-    why = result.export_error or "no check cell ran"
+    # No check ran *and* no cell failed: the checks stopped themselves, which is
+    # what every check cell does while its answer is still the `...` placeholder
+    # (`mo.stop(answer is ..., ...)`). An unanswered notebook scores 0.
+    if not result.export_error:
+        return None
     return (
-        f"no check cell ran ({why}; {result.cell_errors} cell error(s)) -- the notebook "
-        "could not get far enough to grade, e.g. data it reads was not reachable offline"
+        f"no check cell ran ({result.export_error}; {result.cell_errors} cell error(s)) -- "
+        "the notebook could not get far enough to grade, e.g. data it reads was not "
+        "reachable offline, or it cannot run at all"
     )
 
 

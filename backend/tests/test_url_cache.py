@@ -86,5 +86,11 @@ def test_one_broken_answer_still_scores():
     assert nothing_ran_reason(_result([object()], "some cells failed to execute", 1), 5.0) is None
 
 
+def test_an_unanswered_notebook_scores_zero_rather_than_failing():
+    # Every check cell guards with mo.stop(answer is ..., ...). Left unanswered,
+    # nothing fails and nothing is checked: that is a 0, not a grader problem.
+    assert nothing_ran_reason(_result([], "", 0), 5.0) is None
+
+
 def test_a_hand_graded_question_is_left_alone():
     assert nothing_ran_reason(_result([]), 0.0) is None
