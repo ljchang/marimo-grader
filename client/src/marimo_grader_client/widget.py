@@ -68,7 +68,17 @@ function setModel(model, values) {
   model.save_changes();
 }
 
+// A sign-in button's value is what marimo reruns dependent cells on, so only
+// outcomes reach it: "approved" and "idle". Its progress ("pending", errors)
+// is drawn in the widget itself; syncing each step would rerun every cell
+// that depends on the button -- slow cached cells included -- for nothing.
+const SIGNIN_SYNCED = new Set(["approved", "idle"]);
+
 function setStatus(model, status, message = "") {
+  if (model.get("mode") === "signin") {
+    if (!SIGNIN_SYNCED.has(status)) return;
+    message = "";
+  }
   setModel(model, { status, message });
 }
 

@@ -94,3 +94,53 @@ def test_custom_refresh_message_updates_payload():
     assert sent == [{"type": "payload"}]
     w._on_custom_msg(w, {"type": "other"}, [])
     assert w.payload == {"notebook": "v1"}
+
+
+# Node script for test_signin_button_syncs_outcomes_only. It builds the
+# triple-quote marker at runtime so this module's own string stays intact.
+_NODE_SET_STATUS = r"""
+const Q3 = '"'.repeat(3);
+const src = require("fs").readFileSync(process.argv[1], "utf8");
+const js = src.split("_ESM = r" + Q3)[1].split(Q3)[0];
+const pick = (name) => {
+  const i = js.indexOf(name);
+  return js.slice(i, js.indexOf("\n}\n", i) + 2);
+};
+eval(pick("function setModel(") + "\n" + pick("const SIGNIN_SYNCED") + "\n" + pick("function setStatus("));
+const fake = (mode) => {
+  const st = { mode, status: "idle", message: "" };
+  let saves = 0;
+  return { get: (k) => st[k], set: (k, v) => { st[k] = v; }, save_changes: () => saves++, st, saves: () => saves };
+};
+const out = {};
+const s = fake("signin");
+for (const [st, msg] of [["pending", "waiting"], ["error", "Could not reach"], ["approved", ""]]) setStatus(s, st, msg);
+out.signin = { saves: s.saves(), status: s.st.status, message: s.st.message };
+const m = fake("submit");
+for (const st of ["pending", "submitting", "error"]) setStatus(m, st, "x");
+out.submit = { saves: m.saves(), status: m.st.status };
+console.log(JSON.stringify(out));
+"""
+
+
+def test_signin_button_syncs_outcomes_only():
+    """Each synced change reruns every cell that depends on the button (cached
+    ones included), so a sign-in's progress stays in the widget's own display."""
+    import json
+    import shutil
+    import subprocess
+
+    import marimo_grader_client.widget as widget_module
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    out = subprocess.run(
+        [node, "-e", _NODE_SET_STATUS, widget_module.__file__],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(out.stdout)
+    assert result["signin"] == {"saves": 1, "status": "approved", "message": ""}
+    assert result["submit"] == {"saves": 3, "status": "error"}  # other modes unchanged
