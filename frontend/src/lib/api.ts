@@ -88,6 +88,7 @@ export interface AssignmentSettings {
   environments: Environment[];
   log_checks: boolean;
   autograde?: boolean;
+  render?: boolean;
   notebook_submission?: boolean;
   notebook_points?: number;
   render_timeout?: number | null;
@@ -226,12 +227,30 @@ export interface Submission {
   score?: Score | null;
   feedback?: string | null;
   render_url?: string | null;
+  /** False when the assignment skips the re-run: show the code, not "still rendering". */
+  renders?: boolean;
+  files_url?: string;
   /** Structured answers sent with the attempt (e.g. text-area values). */
   outputs?: Record<string, unknown>;
   selected?: boolean;
   error?: string | null;
   client?: SubmissionClient;
   rubric?: RubricItem[];
+}
+
+/** What the student saved under storage.private()/<slug>/ (GET /submissions/{id}/files). */
+export interface SubmissionFiles {
+  enabled: boolean;
+  prefix: string | null;
+  files: {
+    path: string;
+    size: number;
+    modified: string;
+    after_deadline: boolean;
+    after_submission: boolean;
+    /** Presigned for 15 minutes. */
+    url: string;
+  }[];
 }
 
 export interface SubmissionCreate {
@@ -722,6 +741,13 @@ export const api = {
     },
     get(submissionId: string, signal?: AbortSignal): Promise<Submission> {
       return request<Submission>(`/submissions/${enc(submissionId)}`, { signal });
+    },
+    /** The submitted notebook source, exactly as stored. */
+    notebook(submissionId: string, signal?: AbortSignal): Promise<string> {
+      return request<string>(`/submissions/${enc(submissionId)}/notebook`, { signal });
+    },
+    files(submissionId: string, signal?: AbortSignal): Promise<SubmissionFiles> {
+      return request<SubmissionFiles>(`/submissions/${enc(submissionId)}/files`, { signal });
     },
     mine(offeringId: string, assignmentId?: string, signal?: AbortSignal): Promise<Submission[]> {
       return request<Submission[]>(`/offerings/${enc(offeringId)}/me/submissions`, {

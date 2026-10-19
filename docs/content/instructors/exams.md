@@ -21,6 +21,23 @@ The window also limits storage credentials. A student's credential covering an a
 
 Turn **autograde** off when nothing should be run against checks. Submissions are still rendered: the grader re-runs the notebook and stores the HTML you read. Raise `render_timeout` (30–3600 s) when that re-run is a real analysis.
 
+Turn **re-run** (`render`) off when the notebook is too heavy for the grader — an analysis over a few gigabytes of data will not fit on a small worker, and the time it takes grows with the data. The grading view then shows the submitted code and a **Saved files** panel: everything the student wrote under `storage.private()/<slug>/` (figures, CSVs, statistical maps), with download links. Ask students to save their results there:
+
+```python
+out = storage.private()
+fig.savefig("result.png")
+out.upload("result.png", "final-exam/figures/result.png")
+out.put("final-exam/answers.csv", answers_df)  # typed by extension
+```
+
+A student's private storage stays writable after the deadline, so each file shows when it last changed, and one modified after `due_at` is flagged.
+
+## Who sees what
+
+A submission, its notebook, render and saved files are visible to the student who made it and to the course staff: instructors, and TAs (a TA assigned to sections sees only those sections). Another student gets the same 404 as for a submission that does not exist. In storage, each student's credential names only their own `users/<offering>/<id>/` prefix, so one student's notebook cannot read a classmate's files either.
+
+One thing the grader cannot control: a notebook opened in molab lives at a molab URL that anyone holding the link can view. Students should not share their molab link during the exam.
+
 ## Publishing one
 
 ```bash

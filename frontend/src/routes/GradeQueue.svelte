@@ -14,7 +14,7 @@
   import type { Params } from '$lib/router.svelte';
   import Notice from '$lib/components/Notice.svelte';
   import Loading from '$lib/components/Loading.svelte';
-  import RenderFrame from '$lib/components/RenderFrame.svelte';
+  import SubmissionView from '$lib/components/SubmissionView.svelte';
 
   let { params }: { params: Params } = $props();
   const offeringId = $derived(params.offering ?? '');
@@ -230,7 +230,7 @@
     <div class="panes">
       <div class="render-pane">
         {#key current.id}
-          <RenderFrame src={current.render_url} title="Submission by {current.netid}" height="100%" />
+          <SubmissionView submission={current} />
         {/key}
       </div>
 

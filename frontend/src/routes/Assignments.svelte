@@ -62,6 +62,7 @@
     environments: Environment[];
     log_checks: boolean;
     autograde: boolean;
+    render: boolean;
     notebook_submission: boolean;
     notebook_points: number;
   }
@@ -78,6 +79,7 @@
       environments: ['molab', 'wasm'],
       log_checks: true,
       autograde: true,
+      render: true,
       notebook_submission: false,
       notebook_points: 0,
     };
@@ -98,6 +100,7 @@
       environments: [...s.environments],
       log_checks: s.log_checks,
       autograde: s.autograde ?? true,
+      render: s.render ?? true,
       notebook_submission: s.notebook_submission ?? false,
       notebook_points: s.notebook_points ?? 0,
     };
@@ -118,6 +121,7 @@
       environments: f.environments,
       log_checks: f.log_checks,
       autograde: f.autograde,
+      render: f.render,
       notebook_submission: f.notebook_submission,
       notebook_points: f.notebook_submission ? Number(f.notebook_points) || 0 : 0,
     };
@@ -306,6 +310,7 @@
     </div>
     <label class="field inline"><input type="checkbox" bind:checked={form.log_checks} /><span>Log check events</span></label>
     <label class="field inline"><input type="checkbox" bind:checked={form.autograde} /><span>Autograde submissions</span></label>
+    <label class="field inline" title="Off for notebooks too heavy for the grader: you read the code and the files saved under storage.private()/<slug>/"><input type="checkbox" bind:checked={form.render} /><span>Re-run to render submissions</span></label>
     <label class="field inline"><input type="checkbox" bind:checked={form.notebook_submission} /><span>Whole-notebook submission</span></label>
     {#if form.notebook_submission}
       <label class="field"><span>Notebook points <span class="muted">(0 = receipt only)</span></span><input type="number" min="0" step="1" bind:value={form.notebook_points} /></label>
@@ -347,7 +352,7 @@
       <dl class="settings">
         <div><dt>Access</dt><dd>{a.settings.visibility === 'enrolled' ? 'enrolled only' : 'public'}, {windowLabel(a)}</dd></div>
         <div><dt>Due</dt><dd>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : 'no due date'}{a.settings.late_policy === 'reject' ? ', no late work' : ''}</dd></div>
-        <div><dt>Autograde</dt><dd>{a.settings.autograde === false ? 'off' : 'on'}{a.settings.notebook_submission ? `, notebook ${trim(a.settings.notebook_points ?? 0)} pts` : ''}</dd></div>
+        <div><dt>Autograde</dt><dd>{a.settings.autograde === false ? 'off' : 'on'}{a.settings.render === false ? ', no re-run' : ''}{a.settings.notebook_submission ? `, notebook ${trim(a.settings.notebook_points ?? 0)} pts` : ''}</dd></div>
         <div><dt>Attempts</dt><dd class="num">{a.settings.attempts_allowed ?? 'unlimited'}</dd></div>
         <div><dt>Policy</dt><dd>{fmtPolicy(a.settings.grade_policy)}</dd></div>
         <div><dt>Environments</dt><dd>{a.settings.environments.length > 0 ? a.settings.environments.join(', ') : 'none'}</dd></div>

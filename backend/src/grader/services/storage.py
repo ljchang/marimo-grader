@@ -264,13 +264,10 @@ class CloudflareR2:
             "session_token": res["sessionToken"],
         }
 
-    def presign(self, *, key: str, method: str, expires: int) -> str:
-        """A presigned URL under the parent key, for runtimes that cannot SigV4
-        (the in-browser WASM workbench)."""
-        import obstore
+    def _parent_store(self):
         from obstore.store import S3Store
 
-        store = S3Store(
+        return S3Store(
             self.s.r2_bucket,
             endpoint=self.s.r2_endpoint,
             region="auto",
@@ -278,7 +275,26 @@ class CloudflareR2:
             access_key_id=self.s.r2_parent_access_key_id,
             secret_access_key=self.s.r2_parent_secret_access_key,
         )
-        return obstore.sign(store, method, key, timedelta(seconds=expires))
+
+    def presign(self, *, key: str, method: str, expires: int) -> str:
+        """A presigned URL under the parent key, for runtimes that cannot SigV4
+        (the in-browser WASM workbench)."""
+        import obstore
+
+        return obstore.sign(self._parent_store(), method, key, timedelta(seconds=expires))
+
+    def list(self, prefix: str) -> list[dict]:
+        """Objects under ``prefix`` as ``{key, size, modified}``, for staff views
+        (a submission's saved files). Never handed to a notebook."""
+        import obstore
+
+        try:
+            rows = obstore.list(self._parent_store(), prefix).collect()
+        except Exception as e:  # noqa: BLE001 -- obstore raises its own hierarchy
+            raise StorageError("r2_list", f"listing {prefix} failed: {e}", 502) from e
+        return [
+            {"key": r["path"], "size": int(r["size"]), "modified": r["last_modified"]} for r in rows
+        ]
 
 
 # --------------------------------------------------------------------------

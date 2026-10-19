@@ -59,6 +59,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "required_datasets": [],
     # False: submissions are stored and rendered but never run against the checks.
     "autograde": True,
+    # False: no `marimo export html` re-run either. For notebooks too heavy for the
+    # worker (a group analysis); the grading view shows the code and the files the
+    # student saved under storage.private()/<slug>/ instead.
+    "render": True,
     # One extra question that takes the whole notebook (services/notebook_submission.py).
     "notebook_submission": False,
     "notebook_points": 0,
@@ -172,7 +176,7 @@ def _validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         # A deadline may coincide with the close; nothing may run backwards.
         if when[then] < when[first] or (first == "release_at" and when[then] == when[first]):
             raise api_error(422, "bad_window", f"{first} must come before {then}")
-    for key in ("autograde", "notebook_submission"):
+    for key in ("autograde", "render", "notebook_submission"):
         if not isinstance(merged[key], bool):
             raise api_error(422, f"bad_{key}", f"{key} must be true or false")
     try:

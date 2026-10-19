@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
+from grader import config
 from grader import db as dbmod
 from grader.models import Assignment, GraderRun, GradingMode, Question, RunKind, Submission
 from tests.conftest import login, notebook_token
@@ -74,6 +75,7 @@ def _runs(sub_id: str) -> set[RunKind]:
         ({"due_at": _at(days=2), "close_at": _at(days=1)}, "bad_window"),
         ({"release_at": (same := _at(days=1)), "close_at": same}, "bad_window"),
         ({"autograde": "no"}, "bad_autograde"),
+        ({"render": 0}, "bad_render"),
         ({"notebook_points": -1}, "bad_points"),
         ({"render_timeout": 5}, "bad_timeout"),
     ],
@@ -306,3 +308,66 @@ def test_presign_expires_at_close(client, seed, storage_on, fake_cf):  # noqa: F
     )
     assert r.status_code == 200, r.text
     assert 240 <= r.json()["expires_in"] <= 300
+
+
+# -- render off: review the code and the files the student saved ----------------------
+
+
+def test_render_off_queues_nothing(client, seed):
+    assert _patch(client, seed, autograde=False, render=False).status_code == 200
+    r = _submit(client, seed, "f00abc1")
+    assert r.status_code == 201
+    assert _runs(r.json()["id"]) == set()
+    tok = notebook_token(client, "f00abc1")
+    j = client.get(
+        f"/api/v1/submissions/{r.json()['id']}", headers={"Authorization": f"Bearer {tok}"}
+    ).json()
+    assert j["renders"] is False and j["render_url"] is None
+
+
+def test_submission_files(client, seed, storage_on, fake_cf, monkeypatch):  # noqa: F811
+    from grader.services import storage
+
+    _set(seed, release_at=_at(days=-2), due_at=_at(hours=1), close_at=_at(days=1))
+    sub_id = _submit(client, seed, "f00abc1").json()["id"]
+    now = datetime.now(UTC)
+    listed: list[str] = []
+
+    def fake_list(self, prefix):
+        listed.append(prefix)
+        return [
+            {
+                "key": prefix + "figures/result.png",
+                "size": 1234,
+                "modified": now - timedelta(hours=1),
+            },
+            {"key": prefix + "answers.csv", "size": 99, "modified": now + timedelta(hours=2)},
+        ]
+
+    monkeypatch.setattr(storage.CloudflareR2, "list", fake_list)
+
+    login(client, "prof")
+    j = client.get(f"/api/v1/submissions/{sub_id}/files").json()
+    uid = storage.uid_for(config.get_settings(), seed.offering_id, "f00abc1")
+    assert listed == [f"users/neuroimaging-2026-fall/{uid}/glm/"]
+    assert j["prefix"] == "/private/glm/"
+    by_path = {f["path"]: f for f in j["files"]}
+    assert set(by_path) == {"figures/result.png", "answers.csv"}
+    assert not by_path["figures/result.png"]["after_deadline"]
+    assert by_path["answers.csv"]["after_deadline"] and by_path["answers.csv"]["after_submission"]
+    assert by_path["answers.csv"]["url"].startswith("https://signed.example/users/")
+    client.cookies.clear()
+
+    # Another student cannot list them.
+    login(client, "f00xyz9")
+    assert client.get(f"/api/v1/submissions/{sub_id}/files").status_code == 404
+
+
+def test_submission_files_without_storage(client, seed):
+    sub_id = _submit(client, seed, "f00abc1").json()["id"]
+    login(client, "prof")
+    assert client.get(f"/api/v1/submissions/{sub_id}/files").json() == {
+        "enabled": False,
+        "prefix": None,
+        "files": [],
+    }

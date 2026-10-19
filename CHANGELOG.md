@@ -31,6 +31,10 @@ submits to upgrade at different times by design. Entries below say which.
   a `_marks` cell; `notebook` is a reserved qid.
 - **`autograde: false`** stores and renders submissions without running checks,
   and **`render_timeout`** gives an assignment longer than the worker default.
+  **`render: false`** skips the re-run too: the grading view shows the submitted
+  code and a *Saved files* panel of what the student wrote under
+  `storage.private()/<slug>/` (`GET /submissions/{id}/files`, presigned links,
+  files changed after `due_at` flagged).
 - `grader publish` gains `--private/--public`, `--release`, `--due`, `--close`,
   `--late-policy`, `--no-autograde`, `--notebook-points` and `--render-timeout`.
 

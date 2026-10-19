@@ -7,7 +7,7 @@
   import Notice from '$lib/components/Notice.svelte';
   import Loading from '$lib/components/Loading.svelte';
   import StateChip from '$lib/components/StateChip.svelte';
-  import RenderFrame from '$lib/components/RenderFrame.svelte';
+  import SubmissionView from '$lib/components/SubmissionView.svelte';
 
   let { params }: { params: Params } = $props();
   const offeringId = $derived(params.offering ?? '');
@@ -165,10 +165,10 @@
                               <td><StateChip state={sub.status} /> {#if sub.status !== 'graded'}<span class="muted small">{statusLabel(sub.status)}</span>{/if}</td>
                               <td class="num">{fmtPoints(submissionPoints(sub), q.max_points)}</td>
                               <td class="wrap feedback">{sub.score?.feedback ?? sub.feedback ?? ''}</td>
-                              <td>{#if sub.render_url}<button class="quiet" onclick={() => (open = open === sub.id ? null : sub.id)}>{open === sub.id ? 'Hide' : 'View'}</button>{/if}</td>
+                              <td>{#if sub.render_url || sub.renders === false}<button class="quiet" onclick={() => (open = open === sub.id ? null : sub.id)}>{open === sub.id ? 'Hide' : 'View'}</button>{/if}</td>
                             </tr>
                             {#if open === sub.id}
-                              <tr><td colspan="6" class="wrap"><RenderFrame src={sub.render_url} title="Attempt {sub.attempt_no}" height="520px" /></td></tr>
+                              <tr><td colspan="6" class="wrap"><SubmissionView submission={sub} height="520px" /></td></tr>
                             {/if}
                           {/each}
                         </tbody>
