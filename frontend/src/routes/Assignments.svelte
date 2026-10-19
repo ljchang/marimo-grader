@@ -7,6 +7,7 @@
     type AssignmentSettings,
     type Environment,
     type GradePolicy,
+    type Visibility,
     type QuestionSpec,
     type VersionResponse,
   } from '$lib/api';
@@ -51,35 +52,88 @@
   let exportIds = $state<Set<string>>(new Set());
 
   interface SettingsForm {
+    visibility: Visibility;
+    release_at: string;
     due_at: string;
+    close_at: string;
+    late_policy: 'accept' | 'reject';
     attempts_allowed: number | null;
     grade_policy: GradePolicy;
     environments: Environment[];
     log_checks: boolean;
+    autograde: boolean;
+    render: boolean;
+    notebook_submission: boolean;
+    notebook_points: number;
   }
 
   function blankSettings(): SettingsForm {
-    return { due_at: '', attempts_allowed: null, grade_policy: 'latest', environments: ['molab', 'wasm'], log_checks: true };
+    return {
+      visibility: 'public',
+      release_at: '',
+      due_at: '',
+      close_at: '',
+      late_policy: 'accept',
+      attempts_allowed: null,
+      grade_policy: 'latest',
+      environments: ['molab', 'wasm'],
+      log_checks: true,
+      autograde: true,
+      render: true,
+      notebook_submission: false,
+      notebook_points: 0,
+    };
   }
+
+  const local = (iso: string | null | undefined) => (iso ? toLocalInput(iso) : '');
+  const utc = (value: string) => (value ? new Date(value).toISOString() : null);
 
   function toForm(s: AssignmentSettings): SettingsForm {
     return {
-      due_at: s.due_at ? toLocalInput(s.due_at) : '',
+      visibility: s.visibility ?? 'public',
+      release_at: local(s.release_at),
+      due_at: local(s.due_at),
+      close_at: local(s.close_at),
+      late_policy: s.late_policy === 'reject' ? 'reject' : 'accept',
       attempts_allowed: s.attempts_allowed,
       grade_policy: s.grade_policy,
       environments: [...s.environments],
       log_checks: s.log_checks,
+      autograde: s.autograde ?? true,
+      render: s.render ?? true,
+      notebook_submission: s.notebook_submission ?? false,
+      notebook_points: s.notebook_points ?? 0,
     };
   }
 
   function fromForm(f: SettingsForm): AssignmentSettings {
+    // A private assignment with a deadline but no close would leave its data
+    // readable forever; close it at the deadline unless told otherwise.
+    const close = f.close_at || (f.visibility === 'enrolled' ? f.due_at : '');
     return {
-      due_at: f.due_at ? new Date(f.due_at).toISOString() : null,
+      visibility: f.visibility,
+      release_at: utc(f.release_at),
+      due_at: utc(f.due_at),
+      close_at: utc(close),
+      late_policy: f.late_policy === 'reject' ? 'reject' : null,
       attempts_allowed: f.attempts_allowed === null || Number.isNaN(f.attempts_allowed) ? null : f.attempts_allowed,
       grade_policy: f.grade_policy,
       environments: f.environments,
       log_checks: f.log_checks,
+      autograde: f.autograde,
+      render: f.render,
+      notebook_submission: f.notebook_submission,
+      notebook_points: f.notebook_submission ? Number(f.notebook_points) || 0 : 0,
     };
+  }
+
+  function windowLabel(a: Assignment): string {
+    const av = a.availability;
+    if (!av) return 'always open';
+    const parts = [];
+    if (av.release_at) parts.push(`opens ${fmtDateTime(av.release_at)}`);
+    if (av.close_at) parts.push(`closes ${fmtDateTime(av.close_at)}`);
+    return parts.length ? `${av.state}: ${parts.join(', ')}` : 'always open';
   }
 
   function toLocalInput(iso: string): string {
@@ -222,7 +276,23 @@
 
 {#snippet settingsFields(form: SettingsForm)}
   <div class="settings-grid">
+    <label class="field">
+      <span>Who can open it</span>
+      <select bind:value={form.visibility}>
+        <option value="public">Anyone (course book)</option>
+        <option value="enrolled">Enrolled students only (exam)</option>
+      </select>
+    </label>
+    <label class="field"><span>Opens <span class="muted">(notebook + data{form.visibility === 'enrolled' ? '; blank = hidden from students' : ''})</span></span><input type="datetime-local" bind:value={form.release_at} /></label>
     <label class="field"><span>Due</span><input type="datetime-local" bind:value={form.due_at} /></label>
+    <label class="field"><span>Closes <span class="muted">(data + submissions{form.visibility === 'enrolled' ? '; blank = at the deadline' : ''})</span></span><input type="datetime-local" bind:value={form.close_at} /></label>
+    <label class="field">
+      <span>After the deadline</span>
+      <select bind:value={form.late_policy}>
+        <option value="accept">Accept, marked late</option>
+        <option value="reject">Refuse submissions</option>
+      </select>
+    </label>
     <label class="field"><span>Attempts allowed <span class="muted">(blank = unlimited)</span></span><input type="number" min="1" step="1" bind:value={form.attempts_allowed} /></label>
     <label class="field">
       <span>Grade policy</span>
@@ -239,6 +309,12 @@
       </div>
     </div>
     <label class="field inline"><input type="checkbox" bind:checked={form.log_checks} /><span>Log check events</span></label>
+    <label class="field inline"><input type="checkbox" bind:checked={form.autograde} /><span>Autograde submissions</span></label>
+    <label class="field inline" title="Off for notebooks too heavy for the grader: you read the code and the files saved under storage.private()/<slug>/"><input type="checkbox" bind:checked={form.render} /><span>Re-run to render submissions</span></label>
+    <label class="field inline"><input type="checkbox" bind:checked={form.notebook_submission} /><span>Whole-notebook submission</span></label>
+    {#if form.notebook_submission}
+      <label class="field"><span>Notebook points <span class="muted">(0 = receipt only)</span></span><input type="number" min="0" step="1" bind:value={form.notebook_points} /></label>
+    {/if}
   </div>
 {/snippet}
 
@@ -274,7 +350,9 @@
       </div>
 
       <dl class="settings">
-        <div><dt>Due</dt><dd>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : 'no due date'}</dd></div>
+        <div><dt>Access</dt><dd>{a.settings.visibility === 'enrolled' ? 'enrolled only' : 'public'}, {windowLabel(a)}</dd></div>
+        <div><dt>Due</dt><dd>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : 'no due date'}{a.settings.late_policy === 'reject' ? ', no late work' : ''}</dd></div>
+        <div><dt>Autograde</dt><dd>{a.settings.autograde === false ? 'off' : 'on'}{a.settings.render === false ? ', no re-run' : ''}{a.settings.notebook_submission ? `, notebook ${trim(a.settings.notebook_points ?? 0)} pts` : ''}</dd></div>
         <div><dt>Attempts</dt><dd class="num">{a.settings.attempts_allowed ?? 'unlimited'}</dd></div>
         <div><dt>Policy</dt><dd>{fmtPolicy(a.settings.grade_policy)}</dd></div>
         <div><dt>Environments</dt><dd>{a.settings.environments.length > 0 ? a.settings.environments.join(', ') : 'none'}</dd></div>

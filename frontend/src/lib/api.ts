@@ -73,12 +73,35 @@ export interface Offering extends Enrollment {
   sections?: Section[];
 }
 
+export type Visibility = 'public' | 'enrolled';
+export type LatePolicy = null | 'accept' | 'reject';
+
 export interface AssignmentSettings {
+  /** enrolled = members only, inside release_at..close_at (an exam). */
+  visibility?: Visibility;
+  release_at?: string | null;
   due_at: string | null;
+  close_at?: string | null;
+  late_policy?: LatePolicy;
   attempts_allowed: number | null;
   grade_policy: GradePolicy;
   environments: Environment[];
   log_checks: boolean;
+  autograde?: boolean;
+  render?: boolean;
+  notebook_submission?: boolean;
+  notebook_points?: number;
+  render_timeout?: number | null;
+}
+
+/** Server-computed window, so every client agrees on "open" without clock math. */
+export interface Availability {
+  state: 'upcoming' | 'open' | 'closed';
+  visibility: Visibility;
+  release_at: string | null;
+  due_at: string | null;
+  close_at: string | null;
+  past_due: boolean;
 }
 
 /** Server shape of GET /offerings/{id}/queue. */
@@ -131,6 +154,7 @@ export interface Assignment {
   title: string;
   latest_version: number | null;
   settings: AssignmentSettings;
+  availability?: Availability;
   questions: Question[];
 }
 
@@ -198,15 +222,35 @@ export interface Submission {
   attempt_no: number;
   submitted_at: string;
   status: SubmissionStatus;
+  /** Submitted after due_at (accepted under the default late policy). */
+  late?: boolean;
   score?: Score | null;
   feedback?: string | null;
   render_url?: string | null;
+  /** False when the assignment skips the re-run: show the code, not "still rendering". */
+  renders?: boolean;
+  files_url?: string;
   /** Structured answers sent with the attempt (e.g. text-area values). */
   outputs?: Record<string, unknown>;
   selected?: boolean;
   error?: string | null;
   client?: SubmissionClient;
   rubric?: RubricItem[];
+}
+
+/** What the student saved under storage.private()/<slug>/ (GET /submissions/{id}/files). */
+export interface SubmissionFiles {
+  enabled: boolean;
+  prefix: string | null;
+  files: {
+    path: string;
+    size: number;
+    modified: string;
+    after_deadline: boolean;
+    after_submission: boolean;
+    /** Presigned for 15 minutes. */
+    url: string;
+  }[];
 }
 
 export interface SubmissionCreate {
@@ -697,6 +741,13 @@ export const api = {
     },
     get(submissionId: string, signal?: AbortSignal): Promise<Submission> {
       return request<Submission>(`/submissions/${enc(submissionId)}`, { signal });
+    },
+    /** The submitted notebook source, exactly as stored. */
+    notebook(submissionId: string, signal?: AbortSignal): Promise<string> {
+      return request<string>(`/submissions/${enc(submissionId)}/notebook`, { signal });
+    },
+    files(submissionId: string, signal?: AbortSignal): Promise<SubmissionFiles> {
+      return request<SubmissionFiles>(`/submissions/${enc(submissionId)}/files`, { signal });
     },
     mine(offeringId: string, assignmentId?: string, signal?: AbortSignal): Promise<Submission[]> {
       return request<Submission[]>(`/offerings/${enc(offeringId)}/me/submissions`, {

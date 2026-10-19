@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
@@ -36,6 +37,7 @@ from grader.models import (
     SubmissionStatus,
     User,
 )
+from grader.services import availability, notebook_submission, storage
 from grader.services.artifacts import store
 from grader.services.events import Event, bus
 from grader.services.grades import final_score
@@ -88,6 +90,12 @@ def q_of(db: Session, v: AssignmentVersion, qid: str) -> Question:
         select(Question).where(Question.assignment_id == v.assignment_id, Question.qid == qid)
     )
     snapshot_qids = {x.get("qid") for x in (v.question_snapshot or [])}
+    # The whole-notebook question follows the assignment's settings, not the
+    # snapshot: turning it on must not require republishing every copy out there.
+    if q is not None and qid == notebook_submission.NOTEBOOK_QID:
+        if not q.active:
+            raise api_error(404, "unknown_question", "whole-notebook submission is off")
+        return q
     if q is None or (snapshot_qids and qid not in snapshot_qids):
         raise api_error(404, "unknown_question", f"question {qid!r} not in this assignment version")
     return q
@@ -117,8 +125,12 @@ def submission_json(db: Session, s: Submission, *, include_feedback: bool = True
         "attempt_no": s.attempt_no,
         "submitted_at": iso(s.submitted_at),
         "status": s.status.value,
+        "late": availability.Window.of(s.question.assignment).is_late(s.submitted_at),
         "netid": s.enrollment.user.netid,
         "render_url": f"/api/v1/submissions/{s.id}/render" if s.render_artifact_id else None,
+        # False when the assignment skips the re-run: show the code, not "still rendering".
+        "renders": bool((s.question.assignment.settings or {}).get("render", True)),
+        "files_url": f"/api/v1/submissions/{s.id}/files",
         "notebook_url": f"/api/v1/submissions/{s.id}/notebook",
         "outputs": submission_outputs(db, s),
         "score": None,
@@ -175,7 +187,13 @@ def create_submission(
         if existing is not None:
             return created_json(existing, duplicate=True)
 
-    settings = version.assignment.settings or {}
+    assignment = version.assignment
+    settings = assignment.settings or {}
+    if enrollment.role == Role.student:
+        # Staff are never held to the window (see services/availability.py).
+        refusal = availability.submission_refusal(assignment, datetime.now(UTC))
+        if refusal is not None:
+            raise api_error(403, *refusal)
     allowed = settings.get("attempts_allowed")
     n_prev = (
         db.scalar(
@@ -212,8 +230,16 @@ def create_submission(
     )
     db.add(sub)
     db.flush()
-    db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
-    db.add(GraderRun(submission_id=sub.id, kind=RunKind.render))
+    # The whole-notebook question has no checks to run; an assignment with
+    # autograde off is read by a person. Either way the render still runs, so the
+    # attempt can be read in the grading view.
+    whole = question.qid == notebook_submission.NOTEBOOK_QID
+    if settings.get("autograde", True) and not whole:
+        db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
+    if notebook_submission.is_receipt(question):
+        sub.status = SubmissionStatus.graded
+    if settings.get("render", True):
+        db.add(GraderRun(submission_id=sub.id, kind=RunKind.render))
     db.flush()
     bus.publish(
         Event(
@@ -310,6 +336,50 @@ def get_notebook(
     art = db.get(Artifact, sub.notebook_artifact_id)
     assert art is not None
     return Response(content=store().get(art), media_type="text/x-python")
+
+
+@router.get("/submissions/{submission_id}/files")
+def get_files(
+    submission_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)
+):
+    """What the student saved under ``storage.private()/<assignment slug>/``.
+
+    The way to hand in figures and files from a notebook too heavy to re-run.
+    Their private prefix stays writable after the deadline, so each file says
+    whether it changed after ``due_at`` and after this attempt was submitted;
+    links are presigned for 15 minutes.
+    """
+    sub = _load_visible(db, user, submission_id)
+    s = get_settings()
+    if not s.storage_enabled:
+        return {"enabled": False, "prefix": None, "files": []}
+    a = sub.question.assignment
+    off = a.offering
+    uid = storage.uid_for(s, off.id, sub.enrollment.user.netid)
+    prefix = f"users/{off.course.slug}-{off.term}/{uid}/{a.slug}/"
+    due = availability.Window.of(a).due_at
+    submitted = (
+        sub.submitted_at if sub.submitted_at.tzinfo else sub.submitted_at.replace(tzinfo=UTC)
+    )
+    cf = storage.CloudflareR2(s)
+    try:
+        rows = cf.list(prefix)
+    except storage.StorageError as e:
+        raise api_error(e.status, e.code, str(e)) from e
+    files = []
+    for r in sorted(rows, key=lambda r: r["key"]):
+        modified = r["modified"]
+        files.append(
+            {
+                "path": r["key"][len(prefix) :],
+                "size": r["size"],
+                "modified": iso(modified),
+                "after_deadline": bool(due and modified > due),
+                "after_submission": modified > submitted,
+                "url": cf.presign(key=r["key"], method="GET", expires=900),
+            }
+        )
+    return {"enabled": True, "prefix": f"/private/{a.slug}/", "files": files}
 
 
 @router.get("/offerings/{offering_id}/me/submissions")

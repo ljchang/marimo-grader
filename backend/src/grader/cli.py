@@ -12,6 +12,18 @@ Questions come from MoGrader's marks cell (``_marks = {"glm-q01": 5, ...}``);
 by default a question is ``auto`` if a ``check("<qid>: ...")`` call exists for
 it in the instructor notebook and ``manual`` otherwise. Override with
 ``--manual qid`` / ``--hybrid qid=auto_points``.
+
+An exam is published the same way, plus the window and how it is submitted::
+
+    grader publish exam.py ... --slug final-exam --private \
+        --release 2026-11-20T09:00-05:00 --due 2026-11-22T23:59-05:00 \
+        --close 2026-11-23T23:59-05:00 --late-policy reject \
+        --no-autograde --notebook-points 100
+
+``--notebook-points`` turns on whole-notebook submission (0 = a receipt, nothing
+to grade). With it on, the instructor notebook needs no ``_marks`` cell. The
+settings are applied before the version is published, and any you leave out
+keep their current values.
 """
 
 from __future__ import annotations
@@ -68,9 +80,13 @@ def _generate_student(source: Path) -> str:
     return text
 
 
-def _questions(source_text: str, manual: set[str], hybrid: dict[str, float]) -> list[dict]:
+def _questions(
+    source_text: str, manual: set[str], hybrid: dict[str, float], *, optional: bool = False
+) -> list[dict]:
     m = MARKS_RE.search(source_text)
     if not m:
+        if optional:
+            return []
         sys.exit("No `_marks = {...}` cell found in the instructor notebook.")
     import ast
 
@@ -126,7 +142,10 @@ def cmd_publish(a: argparse.Namespace) -> None:
     if leaked:
         sys.exit(f"refusing to publish: student notebook still contains {', '.join(leaked)}")
     hybrid = dict((kv.split("=")[0], float(kv.split("=")[1])) for kv in a.hybrid)
-    questions = _questions(source_text, set(a.manual), hybrid)
+    settings = _settings_from_args(a)
+    questions = _questions(
+        source_text, set(a.manual), hybrid, optional=settings.get("notebook_submission", False)
+    )
 
     with httpx.Client(timeout=60) as client:
         token = a.token or _device_login(client, server)
@@ -136,14 +155,32 @@ def cmd_publish(a: argparse.Namespace) -> None:
         r.raise_for_status()
         existing = next((x for x in r.json() if x["slug"] == a.slug), None)
         if existing is None:
+            # Settings ride on the create: a private assignment must never exist,
+            # even for a moment, as public with no window.
             r = client.post(
                 f"{server}/api/v1/offerings/{offering_id}/assignments",
                 headers=h,
-                json={"slug": a.slug, "title": a.title or a.slug},
+                json={"slug": a.slug, "title": a.title or a.slug, "settings": settings},
             )
-            r.raise_for_status()
+            if r.status_code >= 400:
+                sys.exit(f"create failed: {r.status_code} {r.text}")
             existing = r.json()
+            settings = {}
         assignment_id = existing["id"]
+        if settings:
+            r = client.patch(
+                f"{server}/api/v1/offerings/{offering_id}/assignments/{assignment_id}",
+                headers=h,
+                json={"settings": settings, "reason": "grader publish"},
+            )
+            if r.status_code >= 400:
+                sys.exit(f"settings rejected: {r.status_code} {r.text}")
+            av = r.json().get("availability", {})
+            print(f"{a.slug}: {av.get('visibility')}, {av.get('state')}", end="")
+            for k in ("release_at", "due_at", "close_at"):
+                if av.get(k):
+                    print(f", {k.removesuffix('_at')} {av[k]}", end="")
+            print()
         # The server finalizes the student notebook (injects ids + version) and stores
         # exactly the bytes it will serve; we download those rather than writing our own.
         r = client.post(
@@ -170,6 +207,28 @@ def cmd_publish(a: argparse.Namespace) -> None:
         print(
             f"Served at {v['student_url']}  (MoLab: {v.get('molab_url', v['student_url'].replace('/student.py', '/molab'))})"
         )
+
+
+def _settings_from_args(a: argparse.Namespace) -> dict:
+    """Only the settings a flag was given for, so a republish never resets the rest."""
+    out: dict = {}
+    if a.private:
+        out["visibility"] = "enrolled"
+    if a.public:
+        out["visibility"] = "public"
+    for flag, key in (("release", "release_at"), ("due", "due_at"), ("close", "close_at")):
+        if getattr(a, flag) is not None:
+            out[key] = getattr(a, flag) or None
+    if a.late_policy is not None:
+        out["late_policy"] = None if a.late_policy == "accept" else a.late_policy
+    if a.no_autograde:
+        out["autograde"] = False
+    if a.notebook_points is not None:
+        out["notebook_submission"] = True
+        out["notebook_points"] = a.notebook_points
+    if a.render_timeout is not None:
+        out["render_timeout"] = a.render_timeout
+    return out
 
 
 def cmd_seed(a: argparse.Namespace) -> None:
@@ -310,6 +369,18 @@ def main(argv: list[str] | None = None) -> None:
     pub.add_argument("--hybrid", action="append", default=[], help="qid=auto_points")
     pub.add_argument("--token", help="notebook token (skip interactive sign-in)")
     pub.add_argument("--out")
+    vis = pub.add_mutually_exclusive_group()
+    vis.add_argument("--private", action="store_true", help="enrolled students only, in the window")
+    vis.add_argument("--public", action="store_true", help="anyone (the default for new ones)")
+    pub.add_argument("--release", help="ISO 8601; opens notebook + data ('' clears)")
+    pub.add_argument("--due", help="ISO 8601 submission deadline ('' clears)")
+    pub.add_argument("--close", help="ISO 8601; closes data + submissions ('' clears)")
+    pub.add_argument("--late-policy", choices=["accept", "reject"])
+    pub.add_argument("--no-autograde", action="store_true", help="store and render only")
+    pub.add_argument(
+        "--notebook-points", type=float, help="turn on whole-notebook submission worth N points"
+    )
+    pub.add_argument("--render-timeout", type=int, help="seconds for the render (30-3600)")
     pub.set_defaults(fn=cmd_publish)
     seed = sub.add_parser(
         "seed", help="seed a dev database with a course, offering, instructor, students"

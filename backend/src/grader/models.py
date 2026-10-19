@@ -180,9 +180,10 @@ class Assignment(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     # settings keys: due_at, late_policy, attempts_allowed (int|null), grade_policy
     # (latest|highest|first|selected), environments [..], log_checks (bool),
-    # canvas_assignment_id, required_datasets [..], release_at / close_at (ISO 8601;
-    # the window in which students may read assignments/<off>/<slug>/ in storage --
-    # absent means always)
+    # canvas_assignment_id, required_datasets [..], visibility (public|enrolled),
+    # release_at / close_at (ISO 8601; the window for the notebook, storage data and
+    # submissions -- absent means always; see services/availability.py), autograde,
+    # notebook_submission / notebook_points, render_timeout
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     offering: Mapped[Offering] = relationship(back_populates="assignments")

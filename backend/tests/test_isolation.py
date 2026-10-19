@@ -176,6 +176,7 @@ def test_students_cannot_see_each_other(client, two):
         client.get(f"/api/v1/submissions/{sid1}", headers=h2),
         client.get(f"/api/v1/submissions/{sid1}/notebook", headers=h2),
         client.get(f"/api/v1/submissions/{sid1}/render", headers=h2),
+        client.get(f"/api/v1/submissions/{sid1}/files", headers=h2),
         client.get(f"/api/v1/offerings/{two.offering_id}/students/f00abc1", headers=h2),
         client.get(f"/api/v1/offerings/{two.offering_id}/grid", headers=h2),
         client.get(f"/api/v1/offerings/{two.offering_id}/triage", headers=h2),

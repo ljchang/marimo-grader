@@ -115,7 +115,9 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
         ]
         # Rendering executes the notebook; widgets render as placeholders (GRADER_RENDER).
         env = {**os.environ, "MARIMO_SKIP_UPDATE_CHECK": "1", "GRADER_RENDER": "1"}
-        proc = run_with_timeout(cmd, timeout=RENDER_TIMEOUT, env=env, cwd=td)
+        # An assignment can ask for longer (a group analysis is not a 3-minute job).
+        timeout = (sub.question.assignment.settings or {}).get("render_timeout") or RENDER_TIMEOUT
+        proc = run_with_timeout(cmd, timeout=timeout, env=env, cwd=td)
         if proc.returncode != 0 or not out.exists():
             raise RuntimeError(f"marimo export failed: {proc.stderr[-2000:]}")
         html = out.read_bytes()
