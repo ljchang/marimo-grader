@@ -55,7 +55,6 @@ def _assignment(db: Session, o: Offering, slug: str) -> Assignment:
 
 
 _REFUSALS = {
-    "sign_in": (401, "unauthenticated", "sign in to open this assignment"),
     "not_found": (404, "not_found", "assignment not found"),
     "upcoming": (403, "not_released", "this assignment is not open yet"),
     "closed": (403, "closed", "this assignment has closed"),
@@ -63,7 +62,11 @@ _REFUSALS = {
 
 
 def _gate(db: Session, p: Principal | None, a: Assignment) -> str | None:
-    return availability.fetch_refusal(db, p.user if p else None, a, datetime.now(UTC))
+    reason = availability.fetch_refusal(db, p.user if p else None, a, datetime.now(UTC))
+    # A signed-out caller must not be able to tell a private slug from a missing
+    # one, or the 401/404 split becomes a way to enumerate exams. Students reach
+    # these routes from their portal, already signed in.
+    return "not_found" if reason == "sign_in" else reason
 
 
 def _refuse(reason: str):
@@ -181,10 +184,6 @@ def molab_redirect(
     o = resolve_offering(db, course, term)
     a = _assignment(db, o, slug)
     if (reason := _gate(db, p, a)) is not None:
-        # A browser following a link: send a signed-out reader to sign in rather
-        # than to a JSON error page.
-        if reason == "sign_in":
-            return _sign_in_to_portal(o)
         raise _refuse(reason)
     version = _version(a, v)
     content = _student_bytes(db, version).decode("utf-8", "replace")
@@ -205,12 +204,13 @@ def launch(
     It lands on the student portal, which shows the window and offers *Open in
     molab* and *Download*. A signed-out reader is sent through sign-in first. The
     link reveals nothing by itself: an outsider who follows it reaches a sign-in
-    page and then an offering they are not enrolled in.
+    page and then an offering they are not enrolled in. The signed-out redirect
+    comes before the slug is looked up, so it is the same for every slug.
     """
     o = resolve_offering(db, course, term)
-    a = _assignment(db, o, slug)
     if p is None:
         return _sign_in_to_portal(o)
+    a = _assignment(db, o, slug)
     if availability.fetch_refusal(db, p.user, a, datetime.now(UTC)) == "not_found":
         raise _refuse("not_found")
     return RedirectResponse(f"{get_settings().frontend_url}/me/{o.id}#{a.slug}", 302)

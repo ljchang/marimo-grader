@@ -104,9 +104,18 @@ def test_private_assignment_is_invisible_to_the_public(client, seed):
 
     meta = client.get("/a/neuroimaging/2026-fall/assignments.json").json()
     assert [a["slug"] for a in meta["assignments"]] == []
-    assert client.get(f"{BASE}/student.py").status_code == 401
-    r = client.get(f"{BASE}/molab", follow_redirects=False)
-    assert r.status_code == 302 and "/api/v1/auth/login?next=" in r.headers["location"]
+    # Signed out, a private slug and a missing one are indistinguishable.
+    other = "/a/neuroimaging/2026-fall/no-such-exam"
+    for suffix in ("student.py", "molab"):
+        mine = client.get(f"{BASE}/{suffix}", follow_redirects=False)
+        missing = client.get(f"{other}/{suffix}", follow_redirects=False)
+        assert mine.status_code == missing.status_code == 404
+        assert mine.json() == missing.json()
+    mine = client.get(f"{BASE}/launch", follow_redirects=False)
+    missing = client.get(f"{other}/launch", follow_redirects=False)
+    assert mine.status_code == missing.status_code == 302
+    assert mine.headers["location"] == missing.headers["location"]
+    assert "/api/v1/auth/login?next=" in mine.headers["location"]
 
     # An outsider with a valid sign-in learns nothing more than a stranger.
     from grader.models import User
