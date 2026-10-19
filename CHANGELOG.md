@@ -15,6 +15,25 @@ submits to upgrade at different times by design. Entries below say which.
 
 ### Added
 
+- **Private assignments and exams.** `visibility: enrolled` keeps an
+  assignment out of `assignments.json` and serves its notebook (`/a/.../student.py`,
+  `/molab`) only to signed-in members of the offering, by session or notebook
+  token. `release_at` / `due_at` / `close_at` form one window for the notebook,
+  its storage data and submissions; staff are exempt. `late_policy: reject`
+  refuses work after the deadline, otherwise it is accepted and marked `late`.
+  A new `/a/<course>/<term>/<slug>/launch` link signs a student in and lands on
+  their portal, which now offers *Open in molab* and *Download .py* and shows
+  the window. Storage credentials and presigned URLs no longer outlive an
+  assignment's `close_at`. Docs: *For instructors → Exams and private assignments*.
+- **Whole-notebook submission.** `notebook_submission` adds a `notebook`
+  question that takes the entire notebook: manual when `notebook_points` > 0, a
+  graded-on-arrival receipt at 0. Turning it on lets a version publish without
+  a `_marks` cell; `notebook` is a reserved qid.
+- **`autograde: false`** stores and renders submissions without running checks,
+  and **`render_timeout`** gives an assignment longer than the worker default.
+- `grader publish` gains `--private/--public`, `--release`, `--due`, `--close`,
+  `--late-policy`, `--no-autograde`, `--notebook-points` and `--render-timeout`.
+
 - **Client 0.2.0: course storage in the notebook.** `marimo_grader_client.storage`
   is the notebook side of the storage broker, moved here from
   dartbrains-tools so any course on the grader gets it: `signin_button()` /

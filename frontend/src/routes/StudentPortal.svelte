@@ -55,6 +55,15 @@
     };
   }
 
+  /** Stable /a/ links; the server checks the session and the window again on click. */
+  function notebookUrl(a: Assignment, what: 'molab' | 'student.py'): string | null {
+    if (!enrollment || a.latest_version === null) return null;
+    return `/a/${enrollment.course_slug}/${enrollment.term}/${a.slug}/${what}`;
+  }
+
+  // The launch link from a course page lands here as /me/<offering>#<slug>.
+  const launched = typeof location !== 'undefined' ? decodeURIComponent(location.hash.slice(1)) : '';
+
   function attemptsFor(a: Assignment, questionId: string): Submission[] {
     return (submissions[a.id] ?? [])
       .filter((s) => s.question_id === questionId)
@@ -97,6 +106,7 @@
       <thead>
         <tr>
           <th>Assignment</th>
+          <th>Open</th>
           <th>Due</th>
           <th>Status</th>
           <th class="num">Grade</th>
@@ -107,9 +117,25 @@
       <tbody>
         {#each assignments as a (a.id)}
           {@const s = summarize(a)}
-          <tr>
+          {@const av = a.availability}
+          {@const molab = notebookUrl(a, 'molab')}
+          {@const download = notebookUrl(a, 'student.py')}
+          <tr id={a.slug} class:launched={launched === a.slug}>
             <td class="wrap"><strong>{a.title}</strong><span class="sub">{a.questions.length} question{a.questions.length === 1 ? '' : 's'}, {fmtPolicy(a.settings.grade_policy)}</span></td>
-            <td>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : '—'}</td>
+            <td class="wrap">
+              {#if av?.state === 'upcoming'}
+                <span class="muted small">Opens {fmtDateTime(av.release_at)}</span>
+              {:else if av?.state === 'closed'}
+                <span class="muted small">Closed {fmtDateTime(av.close_at)}</span>
+              {:else if molab && download}
+                <a class="btn small" href={molab} target="_blank" rel="noopener" data-native>Open in molab</a>
+                <a class="quiet small" href={download} download="{a.slug}.py" data-native>Download .py</a>
+                {#if av?.close_at}<span class="sub">Closes {fmtDateTime(av.close_at)}</span>{/if}
+              {:else}
+                <span class="muted small">Not published yet</span>
+              {/if}
+            </td>
+            <td>{a.settings.due_at ? fmtDateTime(a.settings.due_at) : '—'}{#if av?.past_due}<span class="sub">past due{a.settings.late_policy === 'reject' ? ', closed to submissions' : ''}</span>{/if}</td>
             <td><span class="chip {s.status === 'graded' ? 'graded' : s.status === 'submitted' ? 'submitted' : s.status === 'in progress' ? 'progress' : 'none'}">{s.status === 'submitted' ? 'waiting for grade' : s.status}</span></td>
             <td class="num">{fmtPoints(s.points, s.max)}</td>
             <td class="num">{a.settings.attempts_allowed ? `${s.attempts} / ${a.settings.attempts_allowed}` : s.attempts}</td>
@@ -121,7 +147,7 @@
           </tr>
           {#if expanded === a.id}
             <tr class="detail">
-              <td colspan="6" class="wrap">
+              <td colspan="7" class="wrap">
                 {#each [...a.questions].sort((x, y) => x.order - y.order) as q (q.id)}
                   {@const attempts = attemptsFor(a, q.id)}
                   <div class="question">
@@ -135,7 +161,7 @@
                           {#each attempts as sub (sub.id)}
                             <tr class:counts={countingAttempt(attempts, a.settings.grade_policy)?.id === sub.id}>
                               <td class="num">{sub.attempt_no}</td>
-                              <td>{fmtDateTime(sub.submitted_at)}</td>
+                              <td>{fmtDateTime(sub.submitted_at)}{#if sub.late} <span class="chip late">late</span>{/if}</td>
                               <td><StateChip state={sub.status} /> {#if sub.status !== 'graded'}<span class="muted small">{statusLabel(sub.status)}</span>{/if}</td>
                               <td class="num">{fmtPoints(submissionPoints(sub), q.max_points)}</td>
                               <td class="wrap feedback">{sub.score?.feedback ?? sub.feedback ?? ''}</td>
@@ -175,6 +201,13 @@
   }
   table.attempts th {
     background: var(--surface);
+  }
+  tr.launched > td {
+    background: var(--surface);
+  }
+  .chip.late {
+    margin-left: 4px;
+    color: var(--warn);
   }
   tr.counts td:first-child {
     font-weight: 600;

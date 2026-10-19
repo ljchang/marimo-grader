@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
@@ -36,7 +37,7 @@ from grader.models import (
     User,
     new_id,
 )
-from grader.services import audit
+from grader.services import audit, availability, notebook_submission
 from grader.services.artifacts import store
 from grader.services.grades import POLICIES
 from grader.services.notebook_meta import inject_grader_keys, leaked_markers
@@ -44,7 +45,11 @@ from grader.services.notebook_meta import inject_grader_keys, leaked_markers
 router = APIRouter(tags=["offerings"])
 
 DEFAULT_SETTINGS: dict[str, Any] = {
+    # Who may fetch the student notebook, and when: see services/availability.py.
+    "visibility": "public",
+    "release_at": None,
     "due_at": None,
+    "close_at": None,
     "late_policy": None,
     "attempts_allowed": None,
     "grade_policy": "latest",
@@ -52,6 +57,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "log_checks": True,
     "canvas_assignment_id": None,
     "required_datasets": [],
+    # False: submissions are stored and rendered but never run against the checks.
+    "autograde": True,
+    # One extra question that takes the whole notebook (services/notebook_submission.py).
+    "notebook_submission": False,
+    "notebook_points": 0,
+    # Seconds the worker gives `marimo export html`; None means the deployment default.
+    "render_timeout": None,
 }
 
 
@@ -91,6 +103,7 @@ def assignment_json(a: Assignment) -> dict:
         "slug": a.slug,
         "title": a.title,
         "settings": {**DEFAULT_SETTINGS, **(a.settings or {})},
+        "availability": availability.json_for(a, datetime.now(UTC)),
         "latest_version": latest.version if latest else None,
         "latest_version_id": str(latest.id) if latest else None,
         "questions": [_question_json(q) for q in a.questions if q.active],
@@ -140,6 +153,36 @@ def _validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         raise api_error(422, "bad_policy", f"grade_policy must be one of {POLICIES}")
     if merged["attempts_allowed"] is not None and int(merged["attempts_allowed"]) < 1:
         raise api_error(422, "bad_attempts", "attempts_allowed must be >= 1 or null")
+    if merged["visibility"] not in availability.VISIBILITIES:
+        raise api_error(
+            422, "bad_visibility", f"visibility must be one of {availability.VISIBILITIES}"
+        )
+    if merged["late_policy"] not in availability.LATE_POLICIES:
+        raise api_error(422, "bad_late_policy", "late_policy must be null, 'accept' or 'reject'")
+    when: dict[str, datetime] = {}
+    for key in ("release_at", "due_at", "close_at"):
+        try:
+            if (dt := availability.parse(merged[key])) is not None:
+                when[key] = dt
+                merged[key] = dt.isoformat()
+        except (TypeError, ValueError) as e:
+            raise api_error(422, "bad_date", f"{key} must be an ISO 8601 timestamp") from e
+    order = [k for k in ("release_at", "due_at", "close_at") if k in when]
+    for first, then in zip(order, order[1:], strict=False):
+        # A deadline may coincide with the close; nothing may run backwards.
+        if when[then] < when[first] or (first == "release_at" and when[then] == when[first]):
+            raise api_error(422, "bad_window", f"{first} must come before {then}")
+    for key in ("autograde", "notebook_submission"):
+        if not isinstance(merged[key], bool):
+            raise api_error(422, f"bad_{key}", f"{key} must be true or false")
+    try:
+        if float(merged["notebook_points"] or 0) < 0:
+            raise ValueError
+    except (TypeError, ValueError) as e:
+        raise api_error(422, "bad_points", "notebook_points must be a number >= 0") from e
+    rt = merged["render_timeout"]
+    if rt is not None and not (isinstance(rt, int) and 30 <= rt <= 3600):
+        raise api_error(422, "bad_timeout", "render_timeout must be 30-3600 seconds or null")
     return merged
 
 
@@ -161,6 +204,7 @@ def create_assignment(
     )
     db.add(a)
     db.flush()
+    notebook_submission.sync(db, a)
     audit.record(
         db,
         actor_id=m.user.id,
@@ -188,6 +232,7 @@ def patch_assignment(
         a.title = body.title
     if body.settings is not None:
         a.settings = _validate_settings({**(a.settings or {}), **body.settings})
+        notebook_submission.sync(db, a)
     audit.record(
         db,
         actor_id=m.user.id,
@@ -236,8 +281,18 @@ async def publish_version(
         client_hashes = json.loads(cell_hashes)
     except (ValueError, TypeError) as e:
         raise api_error(422, "bad_json", f"questions/cell_hashes must be JSON: {e}") from e
-    if not qs:
-        raise api_error(422, "no_questions", "at least one question is required")
+    if any(q.qid == notebook_submission.NOTEBOOK_QID for q in qs):
+        raise api_error(
+            422,
+            "reserved_qid",
+            f"{notebook_submission.NOTEBOOK_QID!r} is reserved for whole-notebook submission",
+        )
+    if not qs and not notebook_submission.enabled(a):
+        raise api_error(
+            422,
+            "no_questions",
+            "at least one question is required (or turn on notebook_submission)",
+        )
 
     inst_bytes = await instructor_notebook.read()
     student_text = (await student_notebook.read()).decode("utf-8", "replace")
@@ -301,6 +356,7 @@ async def publish_version(
         if qid not in seen:
             q.active = False
     db.flush()
+    notebook_submission.sync(db, a)
 
     version_no = (a.versions[-1].version + 1) if a.versions else 1
     version_id = new_id()
@@ -368,6 +424,13 @@ def student_notebook(
     public = bool((offering.settings or {}).get("public_student_notebooks"))
     if not public and membership_for(db, user, offering.id) is None:
         raise api_error(404, "not_found", "version not found")
+    reason = availability.fetch_refusal(db, user, v.assignment, datetime.now(UTC))
+    if reason == "not_found":
+        raise api_error(404, "not_found", "version not found")
+    if reason is not None:
+        raise api_error(
+            403, "not_released" if reason == "upcoming" else reason, f"assignment {reason}"
+        )
     from grader.models import Artifact
 
     art = db.get(Artifact, v.student_artifact_id)

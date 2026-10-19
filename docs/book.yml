@@ -84,6 +84,7 @@ toc:
       - file: content/instructors/grading.md
       - file: content/instructors/canvas-export.md
       - file: content/instructors/course-storage.md
+      - file: content/instructors/exams.md
       - file: content/instructors/change-log.md
 
   - section: Authentication

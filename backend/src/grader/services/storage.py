@@ -47,6 +47,7 @@ from grader.models import (
     Role,
     StorageGrant,
 )
+from grader.services import availability
 from grader.util import iso
 
 CF_API = "https://api.cloudflare.com/client/v4"
@@ -102,24 +103,34 @@ def uid_for(settings: Settings, offering_id, netid: str) -> str:
     return hmac.new(secret, f"{offering_id}:{netid}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def _parse(ts: str | None) -> datetime | None:
-    if not ts:
-        return None
-    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+# A credential never outlives the earliest close among the windowed assignments
+# it covers, so access ends at close_at rather than up to an hour later. Below
+# this many seconds the assignment is treated as already closed instead of
+# minting a credential too short to be useful.
+MIN_CREDENTIAL_SECONDS = 60
 
 
 def assignment_released(a: Assignment, now: datetime) -> bool:
-    """Students may read an assignment's data from ``release_at`` until ``close_at``.
-    Neither set means always released, matching how assignments behaved before
-    storage existed."""
-    s = a.settings or {}
-    release, close = _parse(s.get("release_at")), _parse(s.get("close_at"))
-    if release and now < release:
+    """Students may read an assignment's data from ``release_at`` until ``close_at``
+    (less the last ``MIN_CREDENTIAL_SECONDS``). Neither set means always released,
+    matching how assignments behaved before storage existed."""
+    w = availability.Window.of(a)
+    if not w.is_open(now):
         return False
-    if close and now >= close:
-        return False
-    return True
+    return not (w.close_at and (w.close_at - now).total_seconds() < MIN_CREDENTIAL_SECONDS)
+
+
+def grant_horizon(db: Session, m: Membership, now: datetime) -> datetime | None:
+    """The earliest ``close_at`` among the windowed assignments a student is
+    granted right now; None for staff and when nothing granted ever closes."""
+    if m.is_staff():
+        return None
+    closes = [
+        w.close_at
+        for a in db.scalars(select(Assignment).where(Assignment.offering_id == m.offering.id))
+        if assignment_released(a, now) and (w := availability.Window.of(a)).close_at
+    ]
+    return min(closes, default=None)
 
 
 # --------------------------------------------------------------------------
@@ -293,6 +304,9 @@ def open_session(
     ro = sorted({mt.prefix for mt in mounts if mt.cred == "ro"})
     rw = sorted({mt.prefix for mt in mounts if mt.cred == "rw"})
     ttl = s.storage_credential_ttl_seconds
+    horizon = grant_horizon(db, m, now)
+    if horizon is not None:
+        ttl = max(MIN_CREDENTIAL_SECONDS, min(ttl, int((horizon - now).total_seconds())))
 
     creds: dict[str, dict] = {}
     if ro:

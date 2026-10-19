@@ -11,6 +11,7 @@ the Cloudflare values in deploy/README.md.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -70,6 +71,12 @@ def storage_presign(
     _enabled()
     s = get_settings()
     expires = min(body.expires, s.storage_presign_max_seconds)
+    now = datetime.now(UTC)
+    horizon = storage.grant_horizon(db, m, now)
+    if horizon is not None:
+        expires = max(
+            storage.MIN_CREDENTIAL_SECONDS, min(expires, int((horizon - now).total_seconds()))
+        )
     try:
         mount, key = storage.resolve(
             storage.grants_for(db, m), body.path, write=body.method == "PUT"

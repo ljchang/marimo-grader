@@ -73,12 +73,34 @@ export interface Offering extends Enrollment {
   sections?: Section[];
 }
 
+export type Visibility = 'public' | 'enrolled';
+export type LatePolicy = null | 'accept' | 'reject';
+
 export interface AssignmentSettings {
+  /** enrolled = members only, inside release_at..close_at (an exam). */
+  visibility?: Visibility;
+  release_at?: string | null;
   due_at: string | null;
+  close_at?: string | null;
+  late_policy?: LatePolicy;
   attempts_allowed: number | null;
   grade_policy: GradePolicy;
   environments: Environment[];
   log_checks: boolean;
+  autograde?: boolean;
+  notebook_submission?: boolean;
+  notebook_points?: number;
+  render_timeout?: number | null;
+}
+
+/** Server-computed window, so every client agrees on "open" without clock math. */
+export interface Availability {
+  state: 'upcoming' | 'open' | 'closed';
+  visibility: Visibility;
+  release_at: string | null;
+  due_at: string | null;
+  close_at: string | null;
+  past_due: boolean;
 }
 
 /** Server shape of GET /offerings/{id}/queue. */
@@ -131,6 +153,7 @@ export interface Assignment {
   title: string;
   latest_version: number | null;
   settings: AssignmentSettings;
+  availability?: Availability;
   questions: Question[];
 }
 
@@ -198,6 +221,8 @@ export interface Submission {
   attempt_no: number;
   submitted_at: string;
   status: SubmissionStatus;
+  /** Submitted after due_at (accepted under the default late policy). */
+  late?: boolean;
   score?: Score | null;
   feedback?: string | null;
   render_url?: string | null;

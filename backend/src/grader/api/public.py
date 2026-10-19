@@ -3,13 +3,23 @@
     /a/{course}/{term}/assignments.json         metadata for every published assignment
     /a/{course}/{term}/{slug}/student.py[?v=N]  the distributed student notebook (exact bytes)
     /a/{course}/{term}/{slug}/molab             302 → MoLab with the notebook in the URL fragment
+    /a/{course}/{term}/{slug}/launch            302 → the student portal (sign-in first if needed)
 
 These are unauthenticated when the offering allows it (``settings.public_student_notebooks``,
 default on: student versions contain no solutions and the public book republishes them).
 Instructor artifacts are never reachable from here.
+
+An assignment with ``visibility: enrolled`` (an exam) is the exception: it is left out
+of ``assignments.json`` and its notebook is served only to a signed-in member of the
+offering -- by session cookie or notebook Bearer token -- and to students only inside
+the ``release_at``..``close_at`` window (services/availability.py). To anyone else it
+does not exist.
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
+from urllib.parse import quote
 
 import lzstring
 from fastapi import APIRouter, Depends
@@ -17,10 +27,11 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from grader.auth.deps import api_error
+from grader.auth.deps import Principal, api_error, optional_principal
 from grader.config import get_settings
 from grader.db import get_db
 from grader.models import Artifact, Assignment, AssignmentVersion, Course, Offering
+from grader.services import availability
 from grader.services.artifacts import store
 from grader.util import iso
 
@@ -41,6 +52,28 @@ def _assignment(db: Session, o: Offering, slug: str) -> Assignment:
     if a is None or not a.versions:
         raise api_error(404, "not_found", "assignment not found")
     return a
+
+
+_REFUSALS = {
+    "sign_in": (401, "unauthenticated", "sign in to open this assignment"),
+    "not_found": (404, "not_found", "assignment not found"),
+    "upcoming": (403, "not_released", "this assignment is not open yet"),
+    "closed": (403, "closed", "this assignment has closed"),
+}
+
+
+def _gate(db: Session, p: Principal | None, a: Assignment) -> str | None:
+    return availability.fetch_refusal(db, p.user if p else None, a, datetime.now(UTC))
+
+
+def _refuse(reason: str):
+    status, code, message = _REFUSALS[reason]
+    return api_error(status, code, message)
+
+
+def _sign_in_to_portal(o: Offering) -> RedirectResponse:
+    nxt = quote(f"/me/{o.id}", safe="")
+    return RedirectResponse(f"{get_settings().base_url}/api/v1/auth/login?next={nxt}", 302)
 
 
 def _version(a: Assignment, v: int | None) -> AssignmentVersion:
@@ -102,16 +135,28 @@ def list_public_assignments(course: str, term: str, db: Session = Depends(get_db
         "term": term,
         "offering_id": str(o.id),
         "title": o.title,
-        "assignments": [assignment_meta(a, course, term) for a in rows if a.versions],
+        "assignments": [
+            assignment_meta(a, course, term)
+            for a in rows
+            if a.versions and not availability.is_private(a)
+        ],
     }
 
 
 @router.get("/a/{course}/{term}/{slug}/student.py")
 def public_student_notebook(
-    course: str, term: str, slug: str, v: int | None = None, db: Session = Depends(get_db)
+    course: str,
+    term: str,
+    slug: str,
+    v: int | None = None,
+    db: Session = Depends(get_db),
+    p: Principal | None = Depends(optional_principal),
 ):
     o = resolve_offering(db, course, term)
-    version = _version(_assignment(db, o, slug), v)
+    a = _assignment(db, o, slug)
+    if (reason := _gate(db, p, a)) is not None:
+        raise _refuse(reason)
+    version = _version(a, v)
     return Response(
         content=_student_bytes(db, version),
         media_type="text/x-python",
@@ -126,10 +171,46 @@ def public_student_notebook(
 
 @router.get("/a/{course}/{term}/{slug}/molab")
 def molab_redirect(
-    course: str, term: str, slug: str, v: int | None = None, db: Session = Depends(get_db)
+    course: str,
+    term: str,
+    slug: str,
+    v: int | None = None,
+    db: Session = Depends(get_db),
+    p: Principal | None = Depends(optional_principal),
 ):
     o = resolve_offering(db, course, term)
-    version = _version(_assignment(db, o, slug), v)
+    a = _assignment(db, o, slug)
+    if (reason := _gate(db, p, a)) is not None:
+        # A browser following a link: send a signed-out reader to sign in rather
+        # than to a JSON error page.
+        if reason == "sign_in":
+            return _sign_in_to_portal(o)
+        raise _refuse(reason)
+    version = _version(a, v)
     content = _student_bytes(db, version).decode("utf-8", "replace")
     compressed = lzstring.LZString().compressToEncodedURIComponent(content)
     return RedirectResponse(MOLAB_TEMPLATE.format(content_lz=compressed), status_code=302)
+
+
+@router.get("/a/{course}/{term}/{slug}/launch")
+def launch(
+    course: str,
+    term: str,
+    slug: str,
+    db: Session = Depends(get_db),
+    p: Principal | None = Depends(optional_principal),
+):
+    """The stable link a course page gives for a private assignment.
+
+    It lands on the student portal, which shows the window and offers *Open in
+    molab* and *Download*. A signed-out reader is sent through sign-in first. The
+    link reveals nothing by itself: an outsider who follows it reaches a sign-in
+    page and then an offering they are not enrolled in.
+    """
+    o = resolve_offering(db, course, term)
+    a = _assignment(db, o, slug)
+    if p is None:
+        return _sign_in_to_portal(o)
+    if availability.fetch_refusal(db, p.user, a, datetime.now(UTC)) == "not_found":
+        raise _refuse("not_found")
+    return RedirectResponse(f"{get_settings().frontend_url}/me/{o.id}#{a.slug}", 302)

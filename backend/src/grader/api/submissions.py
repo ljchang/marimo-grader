@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
@@ -36,6 +37,7 @@ from grader.models import (
     SubmissionStatus,
     User,
 )
+from grader.services import availability, notebook_submission
 from grader.services.artifacts import store
 from grader.services.events import Event, bus
 from grader.services.grades import final_score
@@ -88,6 +90,12 @@ def q_of(db: Session, v: AssignmentVersion, qid: str) -> Question:
         select(Question).where(Question.assignment_id == v.assignment_id, Question.qid == qid)
     )
     snapshot_qids = {x.get("qid") for x in (v.question_snapshot or [])}
+    # The whole-notebook question follows the assignment's settings, not the
+    # snapshot: turning it on must not require republishing every copy out there.
+    if q is not None and qid == notebook_submission.NOTEBOOK_QID:
+        if not q.active:
+            raise api_error(404, "unknown_question", "whole-notebook submission is off")
+        return q
     if q is None or (snapshot_qids and qid not in snapshot_qids):
         raise api_error(404, "unknown_question", f"question {qid!r} not in this assignment version")
     return q
@@ -117,6 +125,7 @@ def submission_json(db: Session, s: Submission, *, include_feedback: bool = True
         "attempt_no": s.attempt_no,
         "submitted_at": iso(s.submitted_at),
         "status": s.status.value,
+        "late": availability.Window.of(s.question.assignment).is_late(s.submitted_at),
         "netid": s.enrollment.user.netid,
         "render_url": f"/api/v1/submissions/{s.id}/render" if s.render_artifact_id else None,
         "notebook_url": f"/api/v1/submissions/{s.id}/notebook",
@@ -175,7 +184,13 @@ def create_submission(
         if existing is not None:
             return created_json(existing, duplicate=True)
 
-    settings = version.assignment.settings or {}
+    assignment = version.assignment
+    settings = assignment.settings or {}
+    if enrollment.role == Role.student:
+        # Staff are never held to the window (see services/availability.py).
+        refusal = availability.submission_refusal(assignment, datetime.now(UTC))
+        if refusal is not None:
+            raise api_error(403, *refusal)
     allowed = settings.get("attempts_allowed")
     n_prev = (
         db.scalar(
@@ -212,7 +227,14 @@ def create_submission(
     )
     db.add(sub)
     db.flush()
-    db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
+    # The whole-notebook question has no checks to run; an assignment with
+    # autograde off is read by a person. Either way the render still runs, so the
+    # attempt can be read in the grading view.
+    whole = question.qid == notebook_submission.NOTEBOOK_QID
+    if settings.get("autograde", True) and not whole:
+        db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
+    if notebook_submission.is_receipt(question):
+        sub.status = SubmissionStatus.graded
     db.add(GraderRun(submission_id=sub.id, kind=RunKind.render))
     db.flush()
     bus.publish(
