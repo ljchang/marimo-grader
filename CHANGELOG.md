@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-10-19
+
 ### Added
 
 - **Private assignments and exams.** `visibility: enrolled` keeps an
