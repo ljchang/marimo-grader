@@ -15,7 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from grader.auth import device, saml
-from grader.auth.deps import Principal, api_error, current_principal, optional_principal
+from grader.auth.deps import (
+    Principal,
+    api_error,
+    current_principal,
+    effective_role,
+    optional_principal,
+    previewing,
+)
 from grader.auth.sessions import (
     clear_session_cookie,
     create_session,
@@ -25,7 +32,7 @@ from grader.auth.sessions import (
 )
 from grader.config import get_settings
 from grader.db import get_db
-from grader.models import Enrollment, EnrollmentStatus, User, utcnow
+from grader.models import Enrollment, EnrollmentStatus, Role, User, utcnow
 from grader.services import audit, mail
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -142,7 +149,9 @@ def me(p: Principal = Depends(current_principal), db: Session = Depends(get_db))
                 "course_slug": e.offering.course.slug,
                 "term": e.offering.term,
                 "title": e.offering.title,
-                "role": e.role.value,
+                "role": effective_role(e).value,
+                "staff_role": e.role.value if e.role != Role.student else None,
+                "preview": previewing(e),
             }
             for e in enrollments
         ],

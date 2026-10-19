@@ -86,6 +86,22 @@ def require_platform_admin(user: User = Depends(current_user)) -> User:
     return user
 
 
+def previewing(e: Enrollment) -> bool:
+    """A staff enrollment switched to student preview."""
+    return bool(e.preview_student) and e.role != Role.student
+
+
+def effective_role(e: Enrollment) -> Role:
+    """The role every permission check sees: ``student`` while previewing.
+
+    Preview is the whole student experience -- the assignment list, the
+    window, storage credentials, and 403 on staff pages -- except that an
+    assignment's ``release_at`` is ignored, so staff can try it before it
+    opens. Submissions stay tests: ``is_test`` reads the enrollment's own role.
+    """
+    return Role.student if previewing(e) else e.role
+
+
 @dataclass
 class Membership:
     user: User
@@ -94,7 +110,11 @@ class Membership:
 
     @property
     def role(self) -> Role:
-        return self.enrollment.role
+        return effective_role(self.enrollment)
+
+    @property
+    def previewing(self) -> bool:
+        return previewing(self.enrollment)
 
     def is_staff(self) -> bool:
         return self.role in (Role.ta, Role.instructor)

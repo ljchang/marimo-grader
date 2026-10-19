@@ -41,7 +41,11 @@ export interface Enrollment {
   course_slug: string;
   term: string;
   title: string;
+  /** What the server enforces: 'student' while staff are in student preview. */
   role: Role;
+  /** The enrollment's own role when it is a staff one, previewing or not. */
+  staff_role?: 'ta' | 'instructor' | null;
+  preview?: boolean;
 }
 
 export interface Me {
@@ -695,6 +699,13 @@ export const api = {
     },
     assignments(offeringId: string, signal?: AbortSignal): Promise<Assignment[]> {
       return request<Assignment[]>(`/offerings/${enc(offeringId)}/assignments`, { signal });
+    },
+    /** Staff only: see the offering as a student does (release dates aside). */
+    setPreview(offeringId: string, on: boolean): Promise<Offering> {
+      return request<Offering>(`/offerings/${enc(offeringId)}/preview`, {
+        method: 'PUT',
+        body: { on },
+      });
     },
   },
 

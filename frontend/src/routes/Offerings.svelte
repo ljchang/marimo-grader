@@ -56,7 +56,7 @@
           <tr>
             <td class="wrap"><a href={homeFor(o)}><strong>{o.title}</strong></a><span class="sub mono">{o.course_slug}</span></td>
             <td>{o.term}</td>
-            <td>{o.role === 'ta' ? 'Teaching assistant' : o.role === 'instructor' ? 'Instructor' : 'Student'}</td>
+            <td>{o.preview ? 'Student preview' : o.role === 'ta' ? 'Teaching assistant' : o.role === 'instructor' ? 'Instructor' : 'Student'}</td>
             <td><a href={homeFor(o)}>{o.role === 'student' ? 'Assignments and feedback' : 'Open course'}</a></td>
           </tr>
         {/each}

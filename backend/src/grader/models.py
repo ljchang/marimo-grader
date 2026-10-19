@@ -160,6 +160,8 @@ class Enrollment(Base):
     )
     # TA scoping: list of section ids the TA may grade; empty = all sections.
     ta_sections: Mapped[list] = mapped_column(JSON, default=list)
+    # Staff only: see the offering exactly as a student does (auth/deps.py).
+    preview_student: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

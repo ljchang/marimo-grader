@@ -15,6 +15,10 @@ Staff are never held to the window, so you can open, run and submit your own exa
 
 The window also limits storage credentials. A student's credential covering an assignment with a `close_at` expires at the close instead of an hour later, and in the final minute the assignment is no longer granted at all. Data a student already downloaded stays on their machine — the window controls when they can *start*, and the deadline is enforced when they submit.
 
+## Trying it as a student
+
+Being exempt from the window also means staff never see what students see. **Preview as a student** (on your *Student view* page) switches your own account in this offering to the student experience until you leave it: the student assignment list and portal, the window's closing date and deadline, storage credentials scoped like a student's, and no staff pages. One thing differs on purpose: release dates do not apply, so an assignment can be tried end to end before it opens. What you submit in preview is still a test attempt and never reaches the gradebook. A banner on every page says you are previewing, with *Exit preview*. It applies to notebooks too: a molab session signed in as you gets student credentials while preview is on.
+
 ## Reading the whole notebook
 
 **Whole-notebook submission** adds one question, `notebook`, that is not tied to a cell: the student submits the entire notebook and you read it in the grading queue. Give it points to grade it by hand, or leave it at 0 for a receipt that is stored and rendered but never asks for a score. With it on, the instructor notebook needs no `_marks` cell.

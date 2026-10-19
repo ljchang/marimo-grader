@@ -110,12 +110,13 @@ def uid_for(settings: Settings, offering_id, netid: str) -> str:
 MIN_CREDENTIAL_SECONDS = 60
 
 
-def assignment_released(a: Assignment, now: datetime) -> bool:
+def assignment_released(a: Assignment, now: datetime, preview: bool = False) -> bool:
     """Students may read an assignment's data from ``release_at`` until ``close_at``
     (less the last ``MIN_CREDENTIAL_SECONDS``). Neither set means always released,
-    matching how assignments behaved before storage existed."""
+    matching how assignments behaved before storage existed. Staff in student
+    preview are not held to ``release_at``."""
     w = availability.Window.of(a)
-    if not w.is_open(now):
+    if not w.is_open(now, preview):
         return False
     return not (w.close_at and (w.close_at - now).total_seconds() < MIN_CREDENTIAL_SECONDS)
 
@@ -128,7 +129,7 @@ def grant_horizon(db: Session, m: Membership, now: datetime) -> datetime | None:
     closes = [
         w.close_at
         for a in db.scalars(select(Assignment).where(Assignment.offering_id == m.offering.id))
-        if assignment_released(a, now) and (w := availability.Window.of(a)).close_at
+        if assignment_released(a, now, m.previewing) and (w := availability.Window.of(a)).close_at
     ]
     return min(closes, default=None)
 
@@ -158,7 +159,7 @@ def grants_for(db: Session, m: Membership, now: datetime | None = None) -> list[
         select(Assignment).where(Assignment.offering_id == m.offering.id).order_by(Assignment.slug)
     ).all()
     for a in assignments:
-        if staff or assignment_released(a, now):
+        if staff or assignment_released(a, now, m.previewing):
             mounts.append(
                 Mount(f"/assignments/{a.slug}", f"assignments/{off}/{a.slug}/", shared_mode)
             )
