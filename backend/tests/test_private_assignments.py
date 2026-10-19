@@ -371,3 +371,46 @@ def test_submission_files_without_storage(client, seed):
         "prefix": None,
         "files": [],
     }
+
+
+# -- nothing shows while an exam is being built --------------------------------------
+
+
+def _student_list(client, seed, netid="f00abc1"):
+    login(client, netid)
+    rows = client.get(f"/api/v1/offerings/{seed.offering_id}/assignments").json()
+    client.cookies.clear()
+    return [a["slug"] for a in rows]
+
+
+def test_private_without_release_is_closed_to_students(client, seed, storage_on, fake_cf):  # noqa: F811
+    csrf = login(client, "prof")
+    _publish(client, csrf, seed, questions=Q2)
+    client.cookies.clear()
+    _set(seed, visibility="enrolled")  # no release_at yet: still being built
+
+    assert _student_list(client, seed) == []
+    login(client, "f00abc1")
+    assert client.get(f"{BASE}/student.py").json()["error"]["code"] == "not_released"
+    client.cookies.clear()
+    r = _submit(client, seed, "f00abc1")
+    assert r.status_code == 403 and r.json()["error"]["code"] == "not_released"
+    assert "/assignments/glm" not in _mounts(_session(client, seed, "f00abc1"))
+
+    # Staff see and use all of it.
+    login(client, "ta1")
+    assert [
+        a["slug"] for a in client.get(f"/api/v1/offerings/{seed.offering_id}/assignments").json()
+    ] == ["glm"]
+    client.cookies.clear()
+    assert "/assignments/glm" in _mounts(_session(client, seed, "prof"))
+
+    _set(seed, release_at=_at(hours=1))
+    assert _student_list(client, seed) == []
+    _set(seed, release_at=_at(hours=-1))
+    assert _student_list(client, seed) == ["glm"]
+
+
+def test_public_assignment_listed_before_release(client, seed):
+    _set(seed, release_at=_at(days=1))
+    assert _student_list(client, seed) == ["glm"]

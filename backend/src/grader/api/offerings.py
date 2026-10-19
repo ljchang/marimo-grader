@@ -136,6 +136,17 @@ def list_assignments(m: Membership = Depends(require_member), db: Session = Depe
         .where(Assignment.offering_id == m.offering.id)
         .order_by(Assignment.created_at)
     ).all()
+    if not m.is_staff():
+        # A private assignment is not announced before it opens: an exam being
+        # built is invisible to the class (see services/availability.py).
+        now = datetime.now(UTC)
+        rows = [
+            a
+            for a in rows
+            if not (
+                availability.is_private(a) and availability.Window.of(a).state(now) == "upcoming"
+            )
+        ]
     return [assignment_json(a) for a in rows]
 
 

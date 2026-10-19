@@ -283,7 +283,7 @@
         <option value="enrolled">Enrolled students only (exam)</option>
       </select>
     </label>
-    <label class="field"><span>Opens <span class="muted">(notebook + data)</span></span><input type="datetime-local" bind:value={form.release_at} /></label>
+    <label class="field"><span>Opens <span class="muted">(notebook + data{form.visibility === 'enrolled' ? '; blank = hidden from students' : ''})</span></span><input type="datetime-local" bind:value={form.release_at} /></label>
     <label class="field"><span>Due</span><input type="datetime-local" bind:value={form.due_at} /></label>
     <label class="field"><span>Closes <span class="muted">(data + submissions{form.visibility === 'enrolled' ? '; blank = at the deadline' : ''})</span></span><input type="datetime-local" bind:value={form.close_at} /></label>
     <label class="field">

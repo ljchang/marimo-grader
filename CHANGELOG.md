@@ -19,7 +19,10 @@ submits to upgrade at different times by design. Entries below say which.
   assignment out of `assignments.json` and serves its notebook (`/a/.../student.py`,
   `/molab`) only to signed-in members of the offering, by session or notebook
   token. `release_at` / `due_at` / `close_at` form one window for the notebook,
-  its storage data and submissions; staff are exempt. `late_policy: reject`
+  its storage data and submissions; staff are exempt. A private assignment
+  without a `release_at` stays closed and is left out of students' assignment
+  list, so an exam can be built in place. `grader publish` sends settings with
+  the create, so a new private assignment is never briefly public. `late_policy: reject`
   refuses work after the deadline, otherwise it is accepted and marked `late`.
   A new `/a/<course>/<term>/<slug>/launch` link signs a student in and lands on
   their portal, which now offers *Open in molab* and *Download .py* and shows

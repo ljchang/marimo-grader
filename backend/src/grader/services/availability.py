@@ -11,8 +11,11 @@ Three instants in ``Assignment.settings``, all ISO 8601 and all optional:
 book republishes them) or ``enrolled`` (members of the offering only, inside
 the window; staff at any time). An exam is ``enrolled``.
 
-Staff are never held to the window, so an instructor can open, run and submit
-their own assignment before students see it.
+A private assignment opens only once it has a ``release_at``: until then it is
+``upcoming`` -- not listed for students, not downloadable, its data not granted,
+not submittable -- however long it is being built. Staff are never held to the
+window, so an instructor can open, run and submit their own assignment before
+students see it.
 """
 
 from __future__ import annotations
@@ -41,14 +44,23 @@ class Window:
     release_at: datetime | None
     due_at: datetime | None
     close_at: datetime | None
+    private: bool = False
 
     @classmethod
     def of(cls, a: Assignment) -> Window:
         s = a.settings or {}
-        return cls(parse(s.get("release_at")), parse(s.get("due_at")), parse(s.get("close_at")))
+        return cls(
+            parse(s.get("release_at")),
+            parse(s.get("due_at")),
+            parse(s.get("close_at")),
+            is_private(a),
+        )
 
     def state(self, now: datetime) -> str:
-        """``upcoming`` before release, ``closed`` from close, otherwise ``open``."""
+        """``upcoming`` before release (and, for a private assignment, until it has a
+        release date at all), ``closed`` from close, otherwise ``open``."""
+        if self.private and self.release_at is None:
+            return "upcoming"
         if self.release_at and now < self.release_at:
             return "upcoming"
         if self.close_at and now >= self.close_at:
@@ -73,7 +85,8 @@ def submission_refusal(a: Assignment, now: datetime) -> tuple[str, str] | None:
     w = Window.of(a)
     state = w.state(now)
     if state == "upcoming":
-        return "not_released", f"this assignment opens at {w.release_at.isoformat()}"
+        when = f"opens at {w.release_at.isoformat()}" if w.release_at else "is not open yet"
+        return "not_released", f"this assignment {when}"
     if state == "closed":
         return "closed", f"this assignment closed at {w.close_at.isoformat()}"
     if (a.settings or {}).get("late_policy") == "reject" and w.is_late(now):

@@ -155,13 +155,17 @@ def cmd_publish(a: argparse.Namespace) -> None:
         r.raise_for_status()
         existing = next((x for x in r.json() if x["slug"] == a.slug), None)
         if existing is None:
+            # Settings ride on the create: a private assignment must never exist,
+            # even for a moment, as public with no window.
             r = client.post(
                 f"{server}/api/v1/offerings/{offering_id}/assignments",
                 headers=h,
-                json={"slug": a.slug, "title": a.title or a.slug},
+                json={"slug": a.slug, "title": a.title or a.slug, "settings": settings},
             )
-            r.raise_for_status()
+            if r.status_code >= 400:
+                sys.exit(f"create failed: {r.status_code} {r.text}")
             existing = r.json()
+            settings = {}
         assignment_id = existing["id"]
         if settings:
             r = client.patch(

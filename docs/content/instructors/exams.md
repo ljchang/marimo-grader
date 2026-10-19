@@ -7,7 +7,7 @@ Every student notebook is public by default: it carries no solutions, and a cour
 | Setting | What it controls |
 |---|---|
 | `visibility: enrolled` | Left out of `assignments.json`; its notebook goes only to signed-in members of the offering. To anyone else it does not exist. |
-| `release_at` | From this moment students can download the notebook, open it in molab, and read `storage.assignment("<slug>")`. |
+| `release_at` | From this moment students can see the assignment, download the notebook, open it in molab, and read `storage.assignment("<slug>")`. A private assignment **without** a `release_at` stays closed and unlisted for students however long you work on it — set the date when it is ready. |
 | `due_at` | The submission deadline. After it, `late_policy` decides: accepted and marked **late** (the default), or `reject`. |
 | `close_at` | The hard end: no notebook download, no data, no submissions. It may be later than the deadline, so students can still re-run their work after submitting. Leave it blank on a private assignment and the form closes it at the deadline. |
 
