@@ -70,7 +70,24 @@
       .sort((x, y) => y.attempt_no - x.attempt_no);
   }
 
-  onMount(async () => {
+  let switching = $state(false);
+  async function startPreview() {
+    switching = true;
+    try {
+      await auth.setPreview(offeringId, true);
+      await load();
+    } catch (err) {
+      error = errorMessage(err);
+    } finally {
+      switching = false;
+    }
+  }
+
+  onMount(load);
+
+  async function load() {
+    assignments = null;
+    error = null;
     try {
       const list = await api.offerings.assignments(offeringId);
       assignments = list;
@@ -84,7 +101,7 @@
       error = errorMessage(err);
       assignments ??= [];
     }
-  });
+  }
 </script>
 
 <div class="page-head">
@@ -92,6 +109,12 @@
     <h1>{enrollment?.title ?? 'Assignments'}</h1>
     <p class="eyebrow">{enrollment?.term ?? ''}, signed in as {auth.me?.display_name ?? auth.me?.netid}</p>
   </div>
+  {#if auth.canPreview(offeringId) && !enrollment?.preview}
+    <div class="preview-offer">
+      <button onclick={startPreview} disabled={switching}>{switching ? 'Switching…' : 'Preview as a student'}</button>
+      <span class="sub">Held to deadlines and closing dates like a student, with student access to data, but assignments open before their release date. Submissions are tests.</span>
+    </div>
+  {/if}
 </div>
 
 {#if error}<Notice kind="error" label="Error">{error}</Notice>{/if}
@@ -186,6 +209,14 @@
 {/if}
 
 <style>
+  .preview-offer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    max-width: 340px;
+    text-align: right;
+  }
   tr.detail > td {
     background: var(--surface);
     padding: 12px 14px 4px;

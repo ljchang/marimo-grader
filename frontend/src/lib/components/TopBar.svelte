@@ -45,6 +45,18 @@
     router.navigate(next === 'admin' ? '/admin' : '/');
   }
 
+  let switching = $state(false);
+  async function exitPreview() {
+    if (!offering) return;
+    switching = true;
+    try {
+      await auth.setPreview(offering.offering_id, false);
+      router.navigate(`/o/${offering.offering_id}`);
+    } finally {
+      switching = false;
+    }
+  }
+
   function active(prefix: string, exact = false): boolean {
     return exact ? router.path === prefix : router.path === prefix || router.path.startsWith(prefix + '/');
   }
@@ -107,6 +119,14 @@
   </div>
 {/if}
 </header>
+{#if offering?.preview}
+  <div class="previewbar" role="status">
+    <div class="inner">
+      <span><strong>Student preview.</strong> You see this course as a student does. Assignments that have not opened yet are open to you, and anything you submit is marked as a test.</span>
+      <button class="quiet" onclick={exitPreview} disabled={switching}>{switching ? 'Leaving…' : 'Exit preview'}</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .mode { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
@@ -178,6 +198,17 @@
     gap: 12px;
     font-size: 13px;
     white-space: nowrap;
+  }
+  .previewbar {
+    background: var(--warn-soft);
+    border-bottom: 1px solid var(--warn);
+    font-size: 13px;
+  }
+  .previewbar .inner {
+    height: auto;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    justify-content: space-between;
   }
   .namebar {
     border-top: 1px solid var(--line, #e3e6e4);

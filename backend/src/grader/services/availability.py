@@ -15,7 +15,9 @@ A private assignment opens only once it has a ``release_at``: until then it is
 ``upcoming`` -- not listed for students, not downloadable, its data not granted,
 not submittable -- however long it is being built. Staff are never held to the
 window, so an instructor can open, run and submit their own assignment before
-students see it.
+students see it. Staff in student preview are held to it, except that
+``release_at`` is ignored (``preview=True`` below): they try an assignment as a
+student would, before it opens.
 """
 
 from __future__ import annotations
@@ -56,19 +58,20 @@ class Window:
             is_private(a),
         )
 
-    def state(self, now: datetime) -> str:
+    def state(self, now: datetime, preview: bool = False) -> str:
         """``upcoming`` before release (and, for a private assignment, until it has a
-        release date at all), ``closed`` from close, otherwise ``open``."""
-        if self.private and self.release_at is None:
+        release date at all), ``closed`` from close, otherwise ``open``. In preview
+        the release date does not apply."""
+        if not preview and self.private and self.release_at is None:
             return "upcoming"
-        if self.release_at and now < self.release_at:
+        if not preview and self.release_at and now < self.release_at:
             return "upcoming"
         if self.close_at and now >= self.close_at:
             return "closed"
         return "open"
 
-    def is_open(self, now: datetime) -> bool:
-        return self.state(now) == "open"
+    def is_open(self, now: datetime, preview: bool = False) -> bool:
+        return self.state(now, preview) == "open"
 
     def is_late(self, at: datetime) -> bool:
         if at.tzinfo is None:
@@ -80,10 +83,12 @@ def is_private(a: Assignment) -> bool:
     return (a.settings or {}).get("visibility", "public") == "enrolled"
 
 
-def submission_refusal(a: Assignment, now: datetime) -> tuple[str, str] | None:
+def submission_refusal(
+    a: Assignment, now: datetime, preview: bool = False
+) -> tuple[str, str] | None:
     """``(code, message)`` when a student may not submit right now, else None."""
     w = Window.of(a)
-    state = w.state(now)
+    state = w.state(now, preview)
     if state == "upcoming":
         when = f"opens at {w.release_at.isoformat()}" if w.release_at else "is not open yet"
         return "not_released", f"this assignment {when}"
@@ -94,11 +99,11 @@ def submission_refusal(a: Assignment, now: datetime) -> tuple[str, str] | None:
     return None
 
 
-def json_for(a: Assignment, now: datetime) -> dict:
+def json_for(a: Assignment, now: datetime, preview: bool = False) -> dict:
     """What a notebook or the portal needs to explain the window to a student."""
     w = Window.of(a)
     return {
-        "state": w.state(now),
+        "state": w.state(now, preview),
         "visibility": (a.settings or {}).get("visibility", "public"),
         "release_at": w.release_at.isoformat() if w.release_at else None,
         "due_at": w.due_at.isoformat() if w.due_at else None,
@@ -125,5 +130,5 @@ def fetch_refusal(db: Session, user: User | None, a: Assignment, now: datetime) 
         return "not_found"
     if m.is_staff():
         return None
-    state = Window.of(a).state(now)
+    state = Window.of(a).state(now, m.previewing)
     return None if state == "open" else state

@@ -13,6 +13,18 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Added
+
+- **Student preview.** Instructors and TAs can switch their own view of an
+  offering to a student's (`PUT /offerings/{id}/preview`, *Preview as a
+  student* on the Student view page) and test an assignment the way the class
+  will: the student list and portal, `close_at` and the deadline enforced,
+  student-scoped storage credentials, staff pages refused -- in the web app and
+  in notebooks signed in as them. Release dates do not apply, so an exam can be
+  tried before it opens; submissions remain test attempts. A banner offers
+  *Exit preview*. New `enrollments.preview_student` column (migration
+  `c4d8e1f2a903`).
+
 ## [0.1.3] — 2026-10-19
 
 ### Added

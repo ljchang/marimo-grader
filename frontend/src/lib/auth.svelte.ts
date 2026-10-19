@@ -76,12 +76,27 @@ export const auth = {
     return this.enrollment(offeringId)?.role ?? null;
   },
 
+  // Student preview outranks platform admin within the offering: the server
+  // already answers as it would for a student, so staff pages would only 403.
   isStaff(offeringId: string): boolean {
+    if (this.enrollment(offeringId)?.preview) return false;
     const r = this.roleFor(offeringId);
     return r === 'ta' || r === 'instructor' || this.isAdmin;
   },
 
   isInstructor(offeringId: string): boolean {
+    if (this.enrollment(offeringId)?.preview) return false;
     return this.roleFor(offeringId) === 'instructor' || this.isAdmin;
+  },
+
+  /** Staff, previewing or not: the people who may switch student preview. */
+  canPreview(offeringId: string): boolean {
+    return !!this.enrollment(offeringId)?.staff_role;
+  },
+
+  /** Switch student preview, then reload the profile every page reads roles from. */
+  async setPreview(offeringId: string, on: boolean): Promise<void> {
+    await api.offerings.setPreview(offeringId, on);
+    await this.load();
   },
 };

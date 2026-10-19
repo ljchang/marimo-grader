@@ -19,7 +19,9 @@ from grader.auth.deps import (
     Membership,
     api_error,
     current_user,
+    effective_role,
     membership_for,
+    previewing,
     require_instructor,
     require_member,
 )
@@ -71,7 +73,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 
-def _offering_json(o: Offering, role: Role | None) -> dict:
+def _offering_json(o: Offering, e: Enrollment | None) -> dict:
     return {
         "id": str(o.id),
         "offering_id": str(o.id),
@@ -79,7 +81,10 @@ def _offering_json(o: Offering, role: Role | None) -> dict:
         "course_title": o.course.title,
         "term": o.term,
         "title": o.title,
-        "role": role.value if role else None,
+        "role": effective_role(e).value if e else None,
+        # Staff in student preview: `role` says student, this says who they are.
+        "staff_role": e.role.value if e and e.role != Role.student else None,
+        "preview": previewing(e) if e else False,
         "settings": o.settings or {},
         "sections": [{"id": str(s.id), "name": s.name} for s in o.sections],
     }
@@ -100,14 +105,14 @@ def _question_json(q: Question) -> dict:
     }
 
 
-def assignment_json(a: Assignment) -> dict:
+def assignment_json(a: Assignment, preview: bool = False) -> dict:
     latest = a.versions[-1] if a.versions else None
     return {
         "id": str(a.id),
         "slug": a.slug,
         "title": a.title,
         "settings": {**DEFAULT_SETTINGS, **(a.settings or {})},
-        "availability": availability.json_for(a, datetime.now(UTC)),
+        "availability": availability.json_for(a, datetime.now(UTC), preview),
         "latest_version": latest.version if latest else None,
         "latest_version_id": str(latest.id) if latest else None,
         "questions": [_question_json(q) for q in a.questions if q.active],
@@ -121,12 +126,49 @@ def list_offerings(user: User = Depends(current_user), db: Session = Depends(get
             Enrollment.user_id == user.id, Enrollment.status == EnrollmentStatus.active
         )
     ).all()
-    return [_offering_json(e.offering, e.role) for e in rows]
+    return [_offering_json(e.offering, e) for e in rows]
 
 
 @router.get("/offerings/{offering_id}")
 def get_offering(m: Membership = Depends(require_member)):
-    return _offering_json(m.offering, m.role)
+    return _offering_json(m.offering, m.enrollment)
+
+
+class PreviewIn(BaseModel):
+    on: bool
+
+
+@router.put("/offerings/{offering_id}/preview")
+def set_preview(
+    offering_id: uuid.UUID,
+    body: PreviewIn,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Switch a staff member's own view of the offering to a student's and back.
+
+    Checked against the enrollment's own role, not the effective one, so the
+    way out of preview is never itself a staff page that preview refuses.
+    """
+    m = membership_for(db, user, offering_id)
+    if m is None:
+        raise api_error(404, "not_found", "offering not found")
+    if m.enrollment.role == Role.student:
+        raise api_error(403, "forbidden", "student preview is for course staff")
+    before = {"preview_student": bool(m.enrollment.preview_student)}
+    m.enrollment.preview_student = body.on
+    db.flush()
+    audit.record(
+        db,
+        actor_id=user.id,
+        offering_id=offering_id,
+        entity="enrollment",
+        entity_id=m.enrollment.id,
+        action="preview",
+        before=before,
+        after={"preview_student": body.on},
+    )
+    return _offering_json(m.offering, m.enrollment)
 
 
 @router.get("/offerings/{offering_id}/assignments")
@@ -144,10 +186,11 @@ def list_assignments(m: Membership = Depends(require_member), db: Session = Depe
             a
             for a in rows
             if not (
-                availability.is_private(a) and availability.Window.of(a).state(now) == "upcoming"
+                availability.is_private(a)
+                and availability.Window.of(a).state(now, m.previewing) == "upcoming"
             )
         ]
-    return [assignment_json(a) for a in rows]
+    return [assignment_json(a, m.previewing) for a in rows]
 
 
 class AssignmentIn(BaseModel):

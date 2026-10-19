@@ -19,7 +19,9 @@ from grader.auth.deps import (
     Membership,
     api_error,
     current_user,
+    effective_role,
     membership_for,
+    previewing,
     require_member,
 )
 from grader.config import get_settings
@@ -189,9 +191,12 @@ def create_submission(
 
     assignment = version.assignment
     settings = assignment.settings or {}
-    if enrollment.role == Role.student:
-        # Staff are never held to the window (see services/availability.py).
-        refusal = availability.submission_refusal(assignment, datetime.now(UTC))
+    if effective_role(enrollment) == Role.student:
+        # Staff are never held to the window (see services/availability.py);
+        # staff in student preview are, apart from the release date.
+        refusal = availability.submission_refusal(
+            assignment, datetime.now(UTC), previewing(enrollment)
+        )
         if refusal is not None:
             raise api_error(403, *refusal)
     allowed = settings.get("attempts_allowed")
