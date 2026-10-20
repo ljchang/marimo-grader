@@ -90,24 +90,29 @@ def nothing_ran_reason(result, auto_points_max: float) -> str | None:
 def student_safety_findings(source: str, released: str | None) -> list[str]:
     """MoGrader's safety scan, counting only what the student wrote.
 
-    A flagged line that also appears, as written, in the notebook the student
-    was given came from the course, not from them: an assignment once shipped
+    A finding is excused only when the released copy -- the notebook the student
+    was given -- was flagged for the same thing on an identical line: then it
+    came from the course, not from them. An assignment once shipped
     ``import io`` in its setup cell, and every submission from that copy was
-    refused before it ran. Those lines are excused; anything the student added
-    is still refused. Without the released copy, nothing is excused.
+    refused before it ran. Matching on the finding as well as the line means a
+    line that merely exists in the release, unflagged there, excuses nothing.
+    Without the released copy, nothing is excused. The scan is a pre-check; the
+    sandbox (bubblewrap, no network, rlimits) is what contains the run.
     """
     from mograder.grading.safety import check_safety
 
-    result = check_safety(source)
-    if result.safe:
+    def findings(text: str) -> list[tuple[str, str]]:
+        lines = text.splitlines()
+        return [
+            (f.description, lines[f.line - 1].strip() if 0 < f.line <= len(lines) else "")
+            for f in check_safety(text).findings
+        ]
+
+    found = findings(source)
+    if not found:
         return []
-    given = {ln.strip() for ln in (released or "").splitlines() if ln.strip()}
-    lines = source.splitlines()
-    return [
-        f.description
-        for f in result.findings
-        if not (0 < f.line <= len(lines) and lines[f.line - 1].strip() in given)
-    ]
+    ours = set(findings(released)) if released else set()
+    return [desc for desc, line in found if (desc, line) not in ours]
 
 
 def grade(db: Session, sub: Submission) -> GradeResult:

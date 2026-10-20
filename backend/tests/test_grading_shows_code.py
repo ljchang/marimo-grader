@@ -32,6 +32,17 @@ def test_template_lines_are_excused_student_lines_are_not():
     ) == ["denied import: os"]
     # With no released copy to compare against, nothing is excused.
     assert student_safety_findings("import io\n", None) == ["denied import: io"]
+    # A line that is in the release but was not flagged there excuses nothing:
+    # here the release only mentions the import inside a string.
+    released_doc = 'doc = """\nfrom os import (\n"""\n'
+    assert student_safety_findings("from os import (\n    path,\n)\n", released_doc) == [
+        "denied import: os"
+    ]
+    # The template's import on a line of the student's own is theirs.
+    assert student_safety_findings("import io, os\n", released) == [
+        "denied import: io",
+        "denied import: os",
+    ]
 
 
 # -- the backfill ------------------------------------------------------------------
