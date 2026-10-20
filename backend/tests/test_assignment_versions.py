@@ -14,6 +14,7 @@ def test_version_history_is_for_instructors(client, seed):
     ).json()
     assert [r["version"] for r in rows] == sorted((r["version"] for r in rows), reverse=True)
     assert rows[0]["published_by"] == "prof" and rows[0]["student_url"].endswith("/student.py")
+    assert rows[0]["created_at"].endswith("+00:00")  # UTC said, not left for the browser to guess
     client.cookies.clear()
     login(client, "ta1")
     r = client.get(

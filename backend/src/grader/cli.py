@@ -30,16 +30,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 import time
 import webbrowser
 from pathlib import Path
 
 import httpx
-
-CHECK_RE = re.compile(r"""check\(\s*[rf]?["']([^"':]+)\s*:\s*([^"']*)["']""")
-MARKS_RE = re.compile(r"_marks\s*=\s*(\{[^}]*\})", re.S)
 
 
 def _device_login(client: httpx.Client, server: str) -> str:
@@ -61,57 +57,23 @@ def _device_login(client: httpx.Client, server: str) -> str:
 
 
 def _generate_student(source: Path) -> str:
+    from grader.services.student_copy import BuildError, generate_student
+
     try:
-        from mograder.grading import cells
-    except ImportError:
-        sys.exit(
-            "mograder is not installed; pass --student with a generated notebook, or `uv pip install mograder`."
-        )
-    lines = source.read_text().splitlines(keepends=True)
-    errors = cells.validate_markers(lines, str(source))
-    if errors:
-        sys.exit("\n".join(f"ERROR: {e}" for e in errors))
-    out = cells.strip_solutions(lines)
-    out = cells.strip_hidden_tests(out)
-    out = cells.convert_markdown_cells(out)
-    text = "".join(out)
-    if hasattr(cells, "_inject_cell_hashes"):
-        text = cells._inject_cell_hashes(text)
-    return text
+        return generate_student(source.read_text(), str(source))
+    except BuildError as e:
+        sys.exit(f"ERROR: {e.message}")
 
 
 def _questions(
     source_text: str, manual: set[str], hybrid: dict[str, float], *, optional: bool = False
 ) -> list[dict]:
-    m = MARKS_RE.search(source_text)
-    if not m:
-        if optional:
-            return []
-        sys.exit("No `_marks = {...}` cell found in the instructor notebook.")
-    import ast
+    from grader.services.student_copy import BuildError, questions_from
 
-    marks = ast.literal_eval(m.group(1))
-    titles = {k.strip(): t.strip() for k, t in CHECK_RE.findall(source_text)}
-    keys_with_checks = set(titles)
-    qs = []
-    for qid, pts in marks.items():
-        if qid in hybrid:
-            mode, auto_max = "hybrid", hybrid[qid]
-        elif qid in manual or qid not in keys_with_checks:
-            mode, auto_max = "manual", 0.0
-        else:
-            mode, auto_max = "auto", float(pts)
-        qs.append(
-            {
-                "qid": qid,
-                "title": titles.get(qid) or qid,
-                "max_points": float(pts),
-                "auto_points_max": auto_max,
-                "grading_mode": mode,
-                "check_keys": [qid] if mode != "manual" else [],
-            }
-        )
-    return qs
+    try:
+        return questions_from(source_text, manual, hybrid, optional=optional)
+    except BuildError as e:
+        sys.exit(e.message)
 
 
 def _resolve_offering(

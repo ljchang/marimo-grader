@@ -1,13 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    api,
-    errorMessage,
-    type Assignment,
-    type QuestionSpec,
-    type VersionResponse,
-    type VersionSummary,
-  } from '$lib/api';
+  import { api, errorMessage, type Assignment, type VersionPreview, type VersionSummary } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
   import { blankSettings, fromForm, toForm } from '$lib/assignmentSettings';
   import { fmtDateTime, fmtPolicy, fmtRelative, trim } from '$lib/format';
@@ -32,14 +25,13 @@
   let editTitle = $state('');
   let editSettings = $state(blankSettings());
 
-  // Hand upload: two notebooks plus the question list as JSON. `grader publish`
-  // does all of this from the instructor notebook alone.
-  let uploading = $state(false);
-  let instructorFiles = $state<FileList | null>(null);
-  let studentFiles = $state<FileList | null>(null);
-  let questionsJson = $state('');
-  let cellHashesJson = $state('{}');
-  let lastVersion = $state<VersionResponse | null>(null);
+  // Publishing: drop in the instructor notebook, read what it would publish, then publish.
+  let publishing = $state(false);
+  let notebookFiles = $state<FileList | null>(null);
+  let preview = $state<VersionPreview | null>(null);
+  let previewing = $state(false);
+  let publishError = $state<string | null>(null);
+  let studentUrl = $state<string | null>(null);
 
   let copied = $state(false);
 
@@ -99,45 +91,53 @@
     }
   }
 
-  function startUpload() {
-    if (!a) return;
-    uploading = !uploading;
-    lastVersion = null;
-    instructorFiles = null;
-    studentFiles = null;
-    cellHashesJson = '{}';
-    questionsJson = JSON.stringify(
-      a.questions.length > 0
-        ? a.questions.map((q) => ({ qid: q.qid, title: q.title, max_points: q.max_points, grading_mode: q.grading_mode, check_keys: [] }))
-        : [{ qid: 'q01', title: 'Question 1', max_points: 5, grading_mode: 'auto', check_keys: [] }],
-      null,
-      2,
-    );
+  function togglePublish() {
+    publishing = !publishing;
+    notebookFiles = null;
+    preview = null;
+    publishError = null;
   }
 
-  async function uploadVersion(e: SubmitEvent) {
-    e.preventDefault();
-    const instructor_notebook = instructorFiles?.[0];
-    const student_notebook = studentFiles?.[0];
-    if (!a || !instructor_notebook || !student_notebook) return;
-    let questions: QuestionSpec[];
-    let cell_hashes: Record<string, string>;
-    try {
-      questions = JSON.parse(questionsJson) as QuestionSpec[];
-      if (!Array.isArray(questions)) throw new Error('questions must be a JSON array');
-      cell_hashes = JSON.parse(cellHashesJson || '{}') as Record<string, string>;
-    } catch (err) {
-      error = `Invalid JSON: ${errorMessage(err)}`;
+  // A preview is fetched as soon as a file is chosen.
+  $effect(() => {
+    const file = notebookFiles?.[0];
+    if (!file || !a) return;
+    const id = a.id;
+    preview = null;
+    publishError = null;
+    previewing = true;
+    api.assignments
+      .previewVersion(offeringId, id, file)
+      .then((p) => (preview = p))
+      .catch((err) => (publishError = errorMessage(err)))
+      .finally(() => (previewing = false));
+  });
+
+  $effect(() => {
+    const text = preview?.student_notebook;
+    if (!text) {
+      studentUrl = null;
       return;
     }
+    const href = URL.createObjectURL(new Blob([text], { type: 'text/x-python' }));
+    studentUrl = href;
+    return () => URL.revokeObjectURL(href);
+  });
+
+  async function publish() {
+    const file = notebookFiles?.[0];
+    if (!a || !file || !preview) return;
     busy = true;
-    error = null;
+    publishError = null;
     try {
-      lastVersion = await api.assignments.uploadVersion(offeringId, a.id, { instructor_notebook, student_notebook, questions, cell_hashes });
-      message = `Version ${lastVersion.version} published.`;
+      const v = await api.assignments.publishFromNotebook(offeringId, a.id, file);
+      message = v.unchanged ? `Nothing to publish: this is version ${v.version}.` : `Version ${v.version} published.`;
+      publishing = false;
+      preview = null;
+      notebookFiles = null;
       await load();
     } catch (err) {
-      error = errorMessage(err);
+      publishError = errorMessage(err);
     } finally {
       busy = false;
     }
@@ -228,29 +228,60 @@
   <section class="block">
     <div class="block-head">
       <h2>Versions</h2>
-      <button class="quiet small" onclick={startUpload} aria-expanded={uploading}>{uploading ? 'Cancel' : 'Upload a version by hand'}</button>
+      <button class="small" class:primary={!publishing} onclick={togglePublish} aria-expanded={publishing}>{publishing ? 'Cancel' : 'Publish a new version'}</button>
     </div>
-    <p class="muted small">Publish new versions with <code>grader publish {a.slug}.py --slug {a.slug}</code> from the assignments repository: it builds the student copy and the question list from the instructor notebook.</p>
 
-    {#if uploading}
-      <form class="card" onsubmit={uploadVersion}>
-        <h3>Upload version {(a.latest_version ?? 0) + 1}</h3>
-        <div class="pair">
-          <label class="field"><span>Instructor notebook (.py)</span><input type="file" accept=".py" bind:files={instructorFiles} required /></label>
-          <label class="field"><span>Student notebook (.py)</span><input type="file" accept=".py" bind:files={studentFiles} required /></label>
-        </div>
+    {#if publishing}
+      <div class="card publish">
         <label class="field">
-          <span>Questions <span class="muted">JSON: [{'{'}qid, title, max_points, grading_mode, check_keys{'}'}]</span></span>
-          <textarea class="mono" rows="8" bind:value={questionsJson} spellcheck="false"></textarea>
+          <span>Instructor notebook <span class="muted">(.py, with solutions and the <code>_marks</code> cell)</span></span>
+          <input type="file" accept=".py" bind:files={notebookFiles} />
         </label>
-        <label class="field">
-          <span>Cell hashes <span class="muted">JSON object, from the release tool</span></span>
-          <textarea class="mono" rows="3" bind:value={cellHashesJson} spellcheck="false"></textarea>
-        </label>
-        <div class="actions">
-          <button class="primary" type="submit" disabled={busy || !instructorFiles?.length || !studentFiles?.length}>{busy ? 'Uploading' : 'Upload'}</button>
-        </div>
-      </form>
+        <p class="muted small">The grader builds the student copy from it (solutions and hidden tests removed) and reads the questions from <code>_marks</code>: one with a <code>check("qid: …")</code> is graded automatically, one without is graded by hand. Nothing is published until you confirm below. <code>grader publish</code> does the same from the command line.</p>
+
+        {#if previewing}<p class="muted small">Reading the notebook…</p>{/if}
+        {#if publishError}<Notice kind="error" label="Cannot publish">{publishError}</Notice>{/if}
+
+        {#if preview}
+          {#if preview.unchanged}
+            <Notice label="Unchanged">This is the notebook and question list of version {preview.version}; publishing would change nothing.</Notice>
+          {:else}
+            <h3>Version {preview.version}</h3>
+            {#if preview.added.length + preview.removed.length + preview.changed.length > 0}
+              <ul class="changes">
+                {#if preview.added.length}<li><strong>New:</strong> <span class="mono">{preview.added.join(', ')}</span></li>{/if}
+                {#if preview.removed.length}<li><strong>Removed:</strong> <span class="mono">{preview.removed.join(', ')}</span> <span class="muted">(kept for submissions already made, no longer offered)</span></li>{/if}
+                {#each preview.changed as c (c.qid)}<li><strong>Changed:</strong> <span class="mono">{c.qid}</span>, {c.what.join(', ')}</li>{/each}
+              </ul>
+            {:else}
+              <p class="muted small">Same questions as now; the notebook itself changed.</p>
+            {/if}
+          {/if}
+          <div class="tablewrap">
+            <table class="data">
+              <thead><tr><th>Question</th><th>Title</th><th>Graded</th><th class="num">Points</th></tr></thead>
+              <tbody>
+                {#each preview.questions as q (q.qid)}
+                  <tr class:new={preview.added.includes(q.qid)}>
+                    <td class="mono">{q.qid}</td>
+                    <td class="wrap">{q.title === q.qid ? '' : q.title}</td>
+                    <td>{graded(q.grading_mode ?? 'auto')}</td>
+                    <td class="num">{trim(q.max_points)}</td>
+                  </tr>
+                {:else}
+                  <tr><td colspan="4" class="muted">No questions: only whole-notebook submission.</td></tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <div class="actions">
+            {#if !preview.unchanged}
+              <button class="primary" onclick={publish} disabled={busy}>{busy ? 'Publishing…' : `Publish version ${preview.version}`}</button>
+            {/if}
+            {#if studentUrl}<a class="small" href={studentUrl} download="{a.slug}_student.py" data-native>Download the student copy to check it</a>{/if}
+          </div>
+        {/if}
+      </div>
     {/if}
 
     {#if versions.length === 0}
@@ -296,10 +327,16 @@
     gap: 8px;
     align-items: center;
   }
-  .pair {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0 16px;
+  ul.changes {
+    margin: 4px 0 10px;
+    padding-left: 18px;
+    font-size: 14px;
+  }
+  tr.new td {
+    background: var(--accent-soft, rgba(46, 160, 110, 0.12));
+  }
+  .publish h3 {
+    margin: 10px 0 4px;
   }
   h2 {
     font-size: 17px;
