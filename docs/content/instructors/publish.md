@@ -22,7 +22,7 @@ Without `--token`, the command opens your browser for the same sign-in handshake
 
 ## From the web page
 
-An assignment that already exists can take a new version without the command line. On **Assignments**, open the assignment and click **Publish a new version**, then choose the instructor notebook. Nothing is published yet: the page shows the version it would become, the questions it found in `_marks` and how each is graded, what is new, removed or changed against the live questions, and a link to download the student copy it built. **Publish version N** makes it live. A notebook that is the same as the current version is reported as unchanged. Anything `grader publish` would refuse -- a solution block that is not closed, no `_marks` cell, a marker left in the student copy -- is refused here with the same reason.
+An assignment that already exists can take a corrected notebook without the command line. On **Assignments**, choose **More**, then **Upload corrected notebook…** (on the assignment's own page it is under **More** too), and pick the instructor notebook. Nothing is published yet: the panel shows the questions it found in `_marks` and how each is graded, what it adds, removes or changes, and a link to download the student copy it built. **Publish** makes it live. A notebook that is the same as what students have is reported as no change. Anything `grader publish` would refuse -- a solution block that is not closed, no `_marks` cell, a marker left in the student copy -- is refused here with the same reason.
 
 The command is still the way to create an assignment and set its dates in one step, and to mark questions `--manual` or `--hybrid` explicitly.
 
@@ -63,7 +63,7 @@ If your course site shows the student notebook (DartBrains commits the file into
 
 ## Assignment settings
 
-Settings live on the grader, not in the notebook, so they change without republishing. Edit them on the Assignments page or through the API:
+Settings live on the grader, not in the notebook, so they change without republishing. Edit them with **Settings** on the Assignments page (or on the assignment's page) or through the API:
 
 ![The assignments page: each published assignment with its version, questions, and settings](../../images/assignments.png)
 

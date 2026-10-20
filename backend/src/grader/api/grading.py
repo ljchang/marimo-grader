@@ -44,7 +44,7 @@ from grader.models import (
     SubmissionStatus,
     User,
 )
-from grader.services import audit, failures
+from grader.services import audit, failures, progress
 from grader.services.artifacts import store
 from grader.services.canvas_export import build_canvas_csv, header_for
 from grader.services.events import Event, bus
@@ -273,6 +273,38 @@ def grid(
             for q in questions
         ],
         "students": out,
+    }
+
+
+@router.get("/offerings/{offering_id}/progress")
+def class_progress(
+    assignment_id: uuid.UUID | None = None,
+    m: Membership = Depends(require_staff),
+    db: Session = Depends(get_db),
+):
+    """Where the class stands, per assignment and per question (services/progress.py).
+
+    With ``assignment_id`` the answer also carries one mark per student per
+    question, in the order of ``students``, for the assignment page's roster strips.
+    """
+    students = _students(db, m)
+    stmt = (
+        select(Question)
+        .join(Assignment)
+        .where(Assignment.offering_id == m.offering.id, Question.active)
+    )
+    if assignment_id is not None:
+        stmt = stmt.where(Question.assignment_id == assignment_id)
+    questions = db.scalars(stmt.order_by(Question.order)).all()
+    marks = assignment_id is not None
+    return {
+        "roster": len(students),
+        "students": (
+            [{"netid": e.user.netid, "display_name": e.user.name} for e in students]
+            if marks
+            else None
+        ),
+        "assignments": progress.compute(db, students, questions, marks=marks),
     }
 
 
