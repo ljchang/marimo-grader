@@ -310,8 +310,35 @@ export interface GraderFailure {
   question_id: string;
   qid?: string;
   netid: string;
+  display_name?: string | null;
   error?: string | null;
   submitted_at?: string;
+}
+
+/** Why grading failed, in words: what happened, whose move it is, whether a retry can help. */
+export interface FailureCause {
+  kind: 'safety' | 'notebook' | 'timeout' | 'data' | 'grader';
+  summary: string;
+  advice: string;
+  retry_helps: boolean;
+}
+
+/** Every failed submission of one assignment that failed for one cause. */
+export interface FailureGroup extends FailureCause {
+  key: string;
+  assignment_id: string;
+  assignment_title: string;
+  error: string;
+  qids: string[];
+  submissions: GraderFailure[];
+}
+
+export type RetryState = 'queued' | 'running' | 'graded' | 'waiting_for_grade' | 'failed';
+
+export interface RetryStatus {
+  submission_id: string;
+  state: RetryState;
+  cause: FailureCause | null;
 }
 
 export interface Triage {
@@ -319,6 +346,7 @@ export interface Triage {
   inactive_students: InactiveStudent[];
   failing_checks: FailingCheck[];
   grader_failures: GraderFailure[];
+  failure_groups: FailureGroup[];
 }
 
 export interface GridCell {
@@ -803,6 +831,16 @@ export const api = {
     },
     audit(offeringId: string, signal?: AbortSignal): Promise<AuditEntry[]> {
       return request<AuditEntry[]>(`/offerings/${enc(offeringId)}/audit`, { signal });
+    },
+    retryMany(offeringId: string, submissionIds: string[]): Promise<{ requeued: string[] }> {
+      return request(`/offerings/${enc(offeringId)}/retry`, {
+        method: 'POST',
+        body: { submission_ids: submissionIds },
+      });
+    },
+    retryStatus(offeringId: string, submissionIds: string[]): Promise<RetryStatus[]> {
+      const ids = encodeURIComponent(submissionIds.join(','));
+      return request<RetryStatus[]>(`/offerings/${enc(offeringId)}/retry-status?ids=${ids}`);
     },
     retry(submissionId: string): Promise<{ id: string; status: string }> {
       return request(`/submissions/${enc(submissionId)}/retry`, { method: 'POST' });

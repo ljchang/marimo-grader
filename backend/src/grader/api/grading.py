@@ -44,7 +44,7 @@ from grader.models import (
     SubmissionStatus,
     User,
 )
-from grader.services import audit
+from grader.services import audit, failures
 from grader.services.artifacts import store
 from grader.services.canvas_export import build_canvas_csv, header_for
 from grader.services.events import Event, bus
@@ -165,7 +165,8 @@ def triage(m: Membership = Depends(require_staff), db: Session = Depends(get_db)
                 )
         failing.sort(key=lambda r: -r["fail_rate"])
 
-    failures = []
+    failed_list = []
+    groups: dict[tuple, dict] = {}
     if enr_ids:
         failed_subs = db.scalars(
             select(Submission)
@@ -173,26 +174,55 @@ def triage(m: Membership = Depends(require_staff), db: Session = Depends(get_db)
                 Submission.enrollment_id.in_(enr_ids), Submission.status == SubmissionStatus.failed
             )
             .order_by(Submission.submitted_at.desc())
-            .limit(50)
+            .limit(500)
         ).all()
         for s in failed_subs:
-            err = next((r.error for r in s.runs if r.status == RunStatus.failed and r.error), None)
-            failures.append(
+            err = _last_error(s)
+            row = {
+                "submission_id": str(s.id),
+                "netid": s.enrollment.user.netid,
+                "display_name": s.enrollment.user.name,
+                "question_id": str(s.question_id),
+                "qid": s.question.qid,
+                "submitted_at": iso(s.submitted_at),
+                "error": (err or "")[:300],
+            }
+            failed_list.append(row)
+            # One entry per cause and assignment: 23 copies of one error are one problem.
+            cause = failures.classify(err)
+            a = s.question.assignment
+            g = groups.setdefault(
+                (a.id, cause.kind, cause.summary),
                 {
-                    "submission_id": str(s.id),
-                    "netid": s.enrollment.user.netid,
-                    "qid": s.question.qid,
-                    "submitted_at": iso(s.submitted_at),
-                    "error": (err or "")[:300],
-                }
+                    "key": f"{a.id}:{cause.kind}:{cause.summary}",
+                    **cause.as_dict(),
+                    "assignment_id": str(a.id),
+                    "assignment_title": a.title,
+                    "error": (err or "")[:2000],
+                    "qids": [],
+                    "submissions": [],
+                },
             )
+            if s.question.qid not in g["qids"]:
+                g["qids"].append(s.question.qid)
+            g["submissions"].append(row)
 
     return {
         "awaiting_manual": sorted(awaiting.values(), key=lambda a: a["oldest_submitted_at"] or ""),
         "inactive_students": inactive,
         "failing_checks": failing,
-        "grader_failures": failures,
+        "grader_failures": failed_list,
+        "failure_groups": sorted(
+            groups.values(), key=lambda g: (-len(g["submissions"]), g["summary"])
+        ),
     }
+
+
+def _last_error(sub: Submission) -> str | None:
+    failed = [r for r in sub.runs if r.status == RunStatus.failed and r.error]
+    if not failed:
+        return None
+    return max(failed, key=lambda r: r.finished_at or r.queued_at).error
 
 
 @router.get("/offerings/{offering_id}/grid")
@@ -562,6 +592,11 @@ def retry_submission(
     m = membership_for(db, user, sub.enrollment.offering_id)
     if m is None or not m.is_staff() or not m.can_see_section(sub.enrollment.section_id):
         raise api_error(404, "not_found", "submission not found")
+    _requeue(db, user, m, sub)
+    return {"id": str(sub.id), "status": sub.status.value}
+
+
+def _requeue(db: Session, user: User, m: Membership, sub: Submission) -> None:
     sub.status = SubmissionStatus.received
     db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
     if sub.render_artifact_id is None:
@@ -576,4 +611,71 @@ def retry_submission(
         action="retry",
         after={"netid": sub.enrollment.user.netid, "qid": sub.question.qid},
     )
-    return {"id": str(sub.id), "status": sub.status.value}
+
+
+def _visible_subs(db: Session, m: Membership, ids: list[uuid.UUID]) -> list[Submission]:
+    subs = db.scalars(select(Submission).where(Submission.id.in_(ids))).all() if ids else []
+    return [
+        s
+        for s in subs
+        if s.enrollment.offering_id == m.offering.id and m.can_see_section(s.enrollment.section_id)
+    ]
+
+
+class RetryMany(BaseModel):
+    submission_ids: list[uuid.UUID] = Field(max_length=500)
+
+
+@router.post("/offerings/{offering_id}/retry")
+def retry_many(
+    body: RetryMany,
+    m: Membership = Depends(require_staff),
+    db: Session = Depends(get_db),
+):
+    """Re-queue several failed submissions (Retry all on one cause)."""
+    done = []
+    for sub in _visible_subs(db, m, body.submission_ids):
+        if sub.status == SubmissionStatus.failed:
+            _requeue(db, m.user, m, sub)
+            done.append(str(sub.id))
+    return {"requeued": done}
+
+
+@router.get("/offerings/{offering_id}/retry-status")
+def retry_status(
+    ids: str,
+    m: Membership = Depends(require_staff),
+    db: Session = Depends(get_db),
+):
+    """Where each retried submission stands: queued, running, graded, waiting
+    for a hand grade, or failed again (with why). Status alone cannot say: a
+    hand-graded question is back at 'received' both before and after its run."""
+    wanted = []
+    for raw in ids.split(",")[:500]:
+        try:
+            wanted.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+    out = []
+    for sub in _visible_subs(db, m, wanted):
+        runs = [r for r in sub.runs if r.kind == RunKind.autograde]
+        if any(r.status == RunStatus.running for r in runs):
+            state = "running"
+        elif any(r.status == RunStatus.queued for r in runs):
+            state = "queued"
+        elif sub.status == SubmissionStatus.failed:
+            state = "failed"
+        elif sub.status == SubmissionStatus.graded:
+            state = "graded"
+        else:
+            state = "waiting_for_grade"
+        out.append(
+            {
+                "submission_id": str(sub.id),
+                "state": state,
+                "cause": failures.classify(_last_error(sub)).as_dict()
+                if state == "failed"
+                else None,
+            }
+        )
+    return out

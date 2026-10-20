@@ -4,8 +4,12 @@
     api,
     errorMessage,
     type Assignment,
+    type FailureCause,
+    type FailureGroup,
+    type GraderFailure,
     type Grid,
     type Question,
+    type RetryState,
     type Triage,
   } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
@@ -27,7 +31,20 @@
   let error = $state<string | null>(null);
   let stream = $state<StreamState>('closed');
   let refreshedAt = $state<number>(Date.now());
-  let retrying = $state<Set<string>>(new Set());
+  // Retried submissions, kept on screen until dismissed so the outcome is visible:
+  // a retried submission leaves the failure list the moment it is re-queued.
+  type Shown = RetryState | 'sending';
+  interface Tracked {
+    row: GraderFailure;
+    group: FailureGroup;
+    state: Shown;
+    cause: FailureCause | null;
+  }
+  let tracked = $state<Record<string, Tracked>>({});
+  let openGroups = $state<Set<string>>(new Set());
+  let polling = false;
+  const SHOW = 5;
+  const terminal = (s: Shown) => s === 'graded' || s === 'waiting_for_grade' || s === 'failed';
 
   const questionsById = $derived.by(() => {
     const m = new Map<string, Question & { assignment: Assignment }>();
@@ -65,15 +82,50 @@
     return out;
   });
 
+  /** Groups from the server, plus any whose every row has been retried away. */
+  const failureGroups = $derived.by(() => {
+    const out = new Map<string, { group: FailureGroup; rows: GraderFailure[] }>();
+    for (const g of triage?.failure_groups ?? []) out.set(g.key, { group: g, rows: [...g.submissions] });
+    for (const [id, t] of Object.entries(tracked)) {
+      const entry = out.get(t.group.key) ?? { group: t.group, rows: [] };
+      if (!entry.rows.some((r) => r.submission_id === id)) entry.rows.push(t.row);
+      out.set(t.group.key, entry);
+    }
+    return [...out.values()];
+  });
+
   const waitingTotal = $derived(triage?.awaiting_manual.reduce((n, a) => n + a.count, 0) ?? 0);
   const attentionCount = $derived(
     triage
       ? (waitingTotal > 0 ? 1 : 0) +
         (triage.inactive_students.length > 0 ? 1 : 0) +
         triage.failing_checks.length +
-        (triage.grader_failures.length > 0 ? 1 : 0)
+        failureGroups.length
       : 0,
   );
+
+  function tally(rows: GraderFailure[]) {
+    const t = { retried: 0, graded: 0, waiting: 0, failed: 0, pending: 0 };
+    for (const r of rows) {
+      const s = tracked[r.submission_id]?.state;
+      if (!s) continue;
+      t.retried += 1;
+      if (s === 'graded') t.graded += 1;
+      else if (s === 'waiting_for_grade') t.waiting += 1;
+      else if (s === 'failed') t.failed += 1;
+      else t.pending += 1;
+    }
+    return t;
+  }
+
+  const stateLabel: Record<Shown, string> = {
+    sending: 'sending…',
+    queued: 'queued',
+    running: 'grading…',
+    graded: 'graded',
+    waiting_for_grade: 'graded automatically, waiting for you',
+    failed: 'failed again',
+  };
 
   async function loadTriage() {
     try {
@@ -133,18 +185,63 @@
     void loadGrid();
   }
 
-  async function retry(submissionId: string) {
-    retrying = new Set([...retrying, submissionId]);
-    try {
-      await api.grading.retry(submissionId);
-      await loadTriage();
-    } catch (err) {
-      error = errorMessage(err);
-    } finally {
-      const next = new Set(retrying);
-      next.delete(submissionId);
-      retrying = next;
+  async function retry(group: FailureGroup, rows: GraderFailure[]) {
+    const ids = rows.map((r) => r.submission_id).filter((id) => !tracked[id] || tracked[id].state === 'failed');
+    if (ids.length === 0) return;
+    for (const r of rows) {
+      if (ids.includes(r.submission_id)) tracked[r.submission_id] = { row: r, group, state: 'sending', cause: null };
     }
+    try {
+      const { requeued } = await api.grading.retryMany(offeringId, ids);
+      for (const id of requeued) if (tracked[id]) tracked[id].state = 'queued';
+      void follow();
+    } catch (err) {
+      for (const id of ids) delete tracked[id];
+      error = errorMessage(err);
+    }
+  }
+
+  /** Poll until every retried submission has an outcome, then refresh the page's data. */
+  async function follow() {
+    if (polling) return;
+    polling = true;
+    try {
+      while (true) {
+        const open = Object.entries(tracked).filter(([, t]) => !terminal(t.state)).map(([id]) => id);
+        if (open.length === 0) break;
+        await new Promise((r) => setTimeout(r, 3000));
+        try {
+          for (const st of await api.grading.retryStatus(offeringId, open)) {
+            const t = tracked[st.submission_id];
+            if (t) {
+              t.state = st.state;
+              t.cause = st.cause;
+            }
+          }
+        } catch {
+          // keep polling; a blip should not strand the rows
+        }
+      }
+      await loadTriage();
+    } finally {
+      polling = false;
+    }
+  }
+
+  function dismiss(group: FailureGroup) {
+    for (const [id, t] of Object.entries(tracked)) if (t.group.key === group.key && terminal(t.state)) delete tracked[id];
+  }
+
+  /** The server marks names with backticks; show them as code, not as punctuation. */
+  function ticks(text: string): { code: boolean; text: string }[] {
+    return text.split('`').map((t, i) => ({ code: i % 2 === 1, text: t }));
+  }
+
+  function toggleGroup(key: string) {
+    const next = new Set(openGroups);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    openGroups = next;
   }
 
   function questionLabel(questionId: string, qid?: string): string {
@@ -166,6 +263,8 @@
 
   const studentCount = $derived(grid?.students.length ?? 0);
 </script>
+
+{#snippet prose(text: string)}{#each ticks(text) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}{/snippet}
 
 <svelte:head><title>{enrollment?.title ?? 'Course'} · DartBrains Grader</title></svelte:head>
 
@@ -199,7 +298,7 @@
             <span class="mark grade" aria-hidden="true"></span>
             <div class="text">
               <strong>{a.count} {a.count === 1 ? 'submission' : 'submissions'} waiting for a grade</strong>
-              on <span class="mono">{questionLabel(a.question_id, a.qid)}</span>{#if a.title}, {a.title}{/if}.
+              on <span class="mono">{questionLabel(a.question_id, a.qid)}</span>{#if a.title && a.title !== a.qid}, {a.title}{/if}.
               <span class="muted">Oldest {fmtRelative(a.oldest_submitted_at)}.</span>
             </div>
             <a class="btn primary small" href="/o/{offeringId}/grade/{a.question_id}">Grade now</a>
@@ -229,26 +328,61 @@
           </div>
         </li>
       {/each}
-      {#if triage.grader_failures.length > 0}
-        <li>
-          <span class="mark bad" aria-hidden="true"></span>
+      {#each failureGroups as { group: g, rows } (g.key)}
+        {@const t = tally(rows)}
+        {@const failing = rows.filter((r) => !tracked[r.submission_id] || tracked[r.submission_id]?.state === 'failed')}
+        {@const shown = openGroups.has(g.key) ? rows : rows.slice(0, SHOW)}
+        <li class="group">
+          <span class="mark {t.retried > 0 && t.failed === 0 && t.pending === 0 ? 'grade' : 'bad'}" aria-hidden="true"></span>
           <div class="text">
-            <strong>{triage.grader_failures.length} {triage.grader_failures.length === 1 ? 'submission' : 'submissions'} could not be graded.</strong>
+            <strong>{rows.length} {rows.length === 1 ? 'submission' : 'submissions'} could not be graded:</strong>
+            {@render prose(g.summary)}.
+            <span class="muted">{g.assignment_title}, {g.qids.join(', ')}.</span>
+            <p class="advice">{@render prose(g.advice)}</p>
+            {#if t.retried > 0}
+              <p class="outcome" role="status">
+                Retried {t.retried}:
+                {[
+                  t.pending ? `${t.pending} in progress` : '',
+                  t.graded ? `${t.graded} graded` : '',
+                  t.waiting ? `${t.waiting} waiting for your grade` : '',
+                  t.failed ? `${t.failed} failed again` : '',
+                ].filter(Boolean).join(', ')}.
+              </p>
+            {/if}
+            <details class="raw"><summary>Error as recorded</summary><pre>{g.error || 'no error recorded'}</pre></details>
             <ul class="failures">
-              {#each triage.grader_failures as f (f.submission_id)}
+              {#each shown as f (f.submission_id)}
+                {@const tr = tracked[f.submission_id]}
                 <li>
-                  <a href="/o/{offeringId}/students/{f.netid}">{f.netid}</a>, <span class="mono">{questionLabel(f.question_id, f.qid)}</span>,
+                  <a href="/o/{offeringId}/students/{f.netid}">{f.display_name || f.netid}</a>
+                  <span class="mono">{questionLabel(f.question_id, f.qid)}</span>
                   <span class="muted" title={fmtDateTime(f.submitted_at)}>{fmtRelative(f.submitted_at)}</span>
-                  <code class="err" title={f.error ?? ''}>{(f.error ?? 'unknown error').slice(0, 90)}</code>
-                  <button class="quiet small" disabled={retrying.has(f.submission_id)} onclick={() => retry(f.submission_id)}>
-                    {retrying.has(f.submission_id) ? 'Retrying' : 'Retry'}
-                  </button>
+                  {#if tr}
+                    <span class="state {tr.state}">{stateLabel[tr.state]}{#if tr.state === 'failed' && tr.cause && tr.cause.summary !== g.summary}: {@render prose(tr.cause.summary)}{/if}</span>
+                  {/if}
+                  {#if !tr || tr.state === 'failed'}
+                    <button class="quiet small" onclick={() => retry(g, [f])}>Retry</button>
+                  {/if}
                 </li>
               {/each}
             </ul>
+            {#if rows.length > SHOW}
+              <button class="quiet small" onclick={() => toggleGroup(g.key)}>{openGroups.has(g.key) ? 'Show fewer' : `Show all ${rows.length}`}</button>
+            {/if}
+          </div>
+          <div class="group-actions">
+            {#if failing.length > 0}
+              <button class="small" class:primary={g.retry_helps} onclick={() => retry(g, failing)} title={g.retry_helps ? '' : 'A retry will most likely fail the same way'}>
+                {g.retry_helps ? 'Retry' : 'Retry anyway'}{failing.length > 1 ? ` all ${failing.length}` : ''}
+              </button>
+            {/if}
+            {#if t.retried > 0 && t.pending === 0}
+              <button class="quiet small" onclick={() => dismiss(g)}>Clear results</button>
+            {/if}
           </div>
         </li>
-      {/if}
+      {/each}
     </ul>
   {/if}
 </section>
@@ -421,15 +555,53 @@
     gap: 6px 8px;
     align-items: baseline;
   }
-  code.err {
-    font-size: 12px;
+  .advice {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .outcome {
+    margin: 6px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  details.raw {
+    margin: 6px 0 0;
+    font-size: 13px;
+  }
+  details.raw summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+  details.raw pre {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 16rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
     background: var(--code-bg);
-    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .state {
+    font-size: 12px;
+    padding: 0 6px;
     border-radius: 3px;
-    max-width: 48ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    background: var(--code-bg);
+  }
+  .state.graded,
+  .state.waiting_for_grade {
+    color: var(--accent);
+  }
+  .state.failed {
+    color: var(--danger);
+  }
+  .group-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
   }
 
   .roster-head {

@@ -13,6 +13,17 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Changed
+
+- **Needs attention groups grading failures by cause.** One entry per
+  assignment and cause instead of one line per submission, saying what happened,
+  whose move it is, and whether a retry can help (`services/failures.py`).
+  **Retry all** re-queues a group (`POST /offerings/{id}/retry`), and the page
+  follows each retried submission to its outcome -- queued, grading, graded,
+  waiting for a hand grade, or failed again with the new reason
+  (`GET /offerings/{id}/retry-status`). The awaiting-grade line no longer repeats
+  a question id used as its title.
+
 ## [0.1.6] — 2026-10-19
 
 ### Security
