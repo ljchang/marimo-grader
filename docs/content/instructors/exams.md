@@ -52,7 +52,7 @@ grader publish exam.py --server https://grader.dartbrains.org \
     --no-autograde --notebook-points 100
 ```
 
-Settings you leave out keep their current values, and every one of them can be changed later under **Assignments → Edit settings**. Put the exam's data under `storage.assignment("final-exam")` from an instructor session; students read it once the window opens.
+Settings you leave out keep their current values, and every one of them can be changed later on the assignment's page (**Assignments**, click its title, then **Settings**). Put the exam's data under `storage.assignment("final-exam")` from an instructor session; students read it once the window opens.
 
 ## What students see
 

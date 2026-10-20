@@ -455,6 +455,15 @@ export interface AdminOffering {
   instructors?: string[];
 }
 
+export interface VersionSummary {
+  id: string;
+  version: number;
+  created_at: string;
+  published_by: string | null;
+  questions: string[];
+  student_url: string;
+}
+
 export interface OfferingCreate {
   term: string;
   title: string;
@@ -748,6 +757,12 @@ export const api = {
       return request<Assignment>(
         `/offerings/${enc(offeringId)}/assignments/${enc(assignmentId)}`,
         { method: 'PATCH', body },
+      );
+    },
+    versions(offeringId: string, assignmentId: string, signal?: AbortSignal): Promise<VersionSummary[]> {
+      return request<VersionSummary[]>(
+        `/offerings/${enc(offeringId)}/assignments/${enc(assignmentId)}/versions`,
+        { signal },
       );
     },
     uploadVersion(

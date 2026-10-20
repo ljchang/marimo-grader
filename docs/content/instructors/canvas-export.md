@@ -11,6 +11,6 @@ The grader does not talk to Canvas directly; institutional API access is rarely 
 
 ## Export
 
-On the course page, open **Export → Canvas gradebook**, tick the assignments, and download. The file contains every student row from your template with the selected assignment columns filled in and all other columns untouched. Students with no counted attempt get an empty cell, not a zero.
+On **Assignments**, click the rows of the assignments to include (or **Select all**), then **Export Canvas CSV**. The file contains every student row from your template with the selected assignment columns filled in and all other columns untouched. Students with no counted attempt get an empty cell, not a zero.
 
 In Canvas, **Import** the file from the gradebook. Canvas previews the changes before applying them. Each export is recorded in the change log.

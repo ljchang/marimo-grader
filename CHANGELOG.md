@@ -13,6 +13,18 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Changed
+
+- **Assignments is a table.** One row per assignment with its access, status,
+  opens / due / closes, version, questions, points and grading; click a column
+  to sort, again to reverse (due date by default). Click rows to select them
+  (or **Select all**) and **Export Canvas CSV** takes the selection. The title
+  opens a new **assignment page**: key settings, a **Settings** button that
+  opens the form in place, the student notebook, Open in molab and a copyable
+  launch link, the questions with their grading queues, and the version history
+  (`GET /offerings/{id}/assignments/{aid}/versions`). Uploading a version by
+  hand moved there, under the `grader publish` command that is the usual way.
+
 ## [0.1.7] — 2026-10-19
 
 ### Changed

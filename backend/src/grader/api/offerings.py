@@ -275,6 +275,29 @@ def create_assignment(
     return assignment_json(a)
 
 
+@router.get("/offerings/{offering_id}/assignments/{assignment_id}/versions")
+def list_versions(
+    assignment_id: uuid.UUID,
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    """Every published version, newest first, for the assignment's detail page."""
+    a = db.get(Assignment, assignment_id)
+    if a is None or a.offering_id != m.offering.id:
+        raise api_error(404, "not_found", "assignment not found")
+    return [
+        {
+            "id": str(v.id),
+            "version": v.version,
+            "created_at": v.created_at.isoformat(),
+            "published_by": (u.netid if (u := db.get(User, v.published_by)) else None),
+            "questions": [q.get("qid") for q in (v.question_snapshot or [])],
+            "student_url": f"/api/v1/assignment-versions/{v.id}/student.py",
+        }
+        for v in sorted(a.versions, key=lambda v: v.version, reverse=True)
+    ]
+
+
 @router.patch("/offerings/{offering_id}/assignments/{assignment_id}")
 def patch_assignment(
     assignment_id: uuid.UUID,
