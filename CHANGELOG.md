@@ -13,6 +13,18 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Client 0.2.4: `put()` stores figures, brain maps and more tables.** A
+  `.nii.gz` name is now gzipped: nibabel's `to_bytes()` is uncompressed, so
+  an image stored that way could not be read back. nltools BrainData is
+  accepted (`to_nifti()`). `.png`, `.jpg`, `.svg` and `.pdf` names take a
+  matplotlib figure or axes, a seaborn grid or a nilearn plot. `.csv`/`.tsv`
+  take polars DataFrames, nltools DesignMatrix and numpy arrays as well as
+  pandas, whose row labels are kept unless they are the default 0, 1, 2….
+  A str under a binary name (a file name passed by mistake) is refused with
+  a pointer to `upload()` instead of being stored as the file.
+
 ## [0.1.10] — 2026-10-19
 
 ### Changed

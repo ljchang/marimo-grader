@@ -171,6 +171,81 @@ def test_put_get_roundtrips_by_extension(local_root):
         p.get("w3/raw.bin")
 
 
+def test_put_nifti_brain_data_and_gzip(local_root):
+    nib = pytest.importorskip("nibabel")
+    p = storage.private()
+    img = nib.Nifti1Image(np.arange(24, dtype="float32").reshape(2, 3, 4), np.eye(4))
+
+    class BrainLike:  # nltools BrainData: no to_bytes, converts with to_nifti()
+        def to_nifti(self):
+            return img
+
+    p.put("maps/a.nii.gz", img)
+    p.put("maps/b.nii.gz", BrainLike())
+    p.put("maps/c.nii", img)
+    assert p.get_bytes("maps/a.nii.gz")[:2] == b"\x1f\x8b"  # really gzipped
+    assert p.get_bytes("maps/c.nii")[:2] != b"\x1f\x8b"
+    for name in ("maps/a.nii.gz", "maps/b.nii.gz", "maps/c.nii"):
+        np.testing.assert_array_equal(p.get(name).get_fdata(), img.get_fdata())
+
+
+def test_put_figures_by_extension(local_root):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    p = storage.private()
+    fig, ax = plt.subplots()
+    ax.plot([1, 2, 3])
+
+    class NilearnLike:  # nilearn plots: savefig() wants a path; the figure is on frame_axes
+        frame_axes = ax
+
+    p.put("figs/fig.png", fig)
+    p.put("figs/ax.png", ax)  # an Axes, as seaborn's heatmap returns
+    p.put("figs/brain.png", NilearnLike())
+    p.put("figs/fig.jpg", fig)
+    p.put("figs/fig.svg", fig)
+    p.put("figs/fig.pdf", fig)
+    plt.close(fig)
+    for name in ("figs/fig.png", "figs/ax.png", "figs/brain.png"):
+        assert p.get_bytes(name)[:8] == b"\x89PNG\r\n\x1a\n"
+    assert p.get_bytes("figs/fig.jpg")[:3] == b"\xff\xd8\xff"
+    assert b"<svg" in p.get_bytes("figs/fig.svg")[:500]
+    assert p.get_bytes("figs/fig.pdf")[:5] == b"%PDF-"
+    with pytest.raises(TypeError, match="matplotlib figure"):
+        p.put("figs/list.png", [1, 2])
+
+
+def test_put_str_where_a_file_was_meant(local_root):
+    p = storage.private()
+    with pytest.raises(TypeError, match=r"upload\('results.png'"):
+        p.put("figs/results.png", "results.png")
+    p.put("figs/inline.svg", "<svg></svg>")  # svg is text: a str is its contents
+    assert p.get_bytes("figs/inline.svg") == b"<svg></svg>"
+
+
+def test_put_tables(local_root):
+    p = storage.private()
+    corr = pd.DataFrame([[1.0, 0.5], [0.5, 1.0]], index=["V1", "M1"], columns=["V1", "M1"])
+    p.put("t/corr.csv", corr)
+    assert list(p.get("t/corr.csv").iloc[:, 0]) == ["V1", "M1"]  # row labels survive
+    filtered = pd.DataFrame({"a": [1, 2, 3]}).query("a > 1")  # index 1, 2: not worth a column
+    p.put("t/filtered.csv", filtered)
+    assert list(p.get("t/filtered.csv").columns) == ["a"]
+    p.put("t/series.tsv", pd.Series([0.1, 0.2], name="signal"))
+    assert list(p.get("t/series.tsv")["signal"]) == [0.1, 0.2]
+    p.put("t/array.csv", np.array([[1.5, 2.0], [3.0, 4.0]]))
+    np.testing.assert_array_equal(p.get("t/array.csv").to_numpy(), [[1.5, 2.0], [3.0, 4.0]])
+
+    class PolarsLike:  # polars and nltools DesignMatrix write with write_csv(file, separator=)
+        def write_csv(self, f, separator=","):
+            f.write(f"go{separator}stop\n1{separator}0\n".encode())
+
+    p.put("t/dm.tsv", PolarsLike())
+    assert list(p.get("t/dm.tsv").columns) == ["go", "stop"]
+
+
 def test_open_and_local_path_and_sync(local_root, tmp_path):
     p = storage.private()
     with p.open("log.txt", "w") as f:

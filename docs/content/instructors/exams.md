@@ -29,9 +29,10 @@ Turn **re-run** (`render`) off when the notebook is too heavy for the grader —
 
 ```python
 out = storage.private()
-fig.savefig("result.png")
-out.upload("result.png", "final-exam/figures/result.png")
-out.put("final-exam/answers.csv", answers_df)  # typed by extension
+out.put("final-exam/figures/result.png", fig)     # a figure, as .png/.jpg/.svg/.pdf
+out.put("final-exam/group_map.nii.gz", group_map)  # a nibabel image or BrainData
+out.put("final-exam/answers.csv", answers_df)      # typed by extension
+out.sync("qc_report", "final-exam/qc_report")      # a whole folder
 ```
 
 A student's private storage stays writable after the deadline, so each file shows when it last changed, and one modified after `due_at` is flagged.
