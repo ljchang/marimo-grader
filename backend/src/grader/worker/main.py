@@ -110,7 +110,8 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
             str(nb),
             "-o",
             str(out),
-            "--no-include-code",
+            # Code above each output: a grader reads the answer, not just "passed".
+            "--include-code",
             "--no-sandbox",
         ]
         # Rendering executes the notebook; widgets render as placeholders (GRADER_RENDER).
@@ -123,7 +124,7 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
         html = out.read_bytes()
     art = store().put(db, html, kind="render", content_type="text/html")
     sub.render_artifact_id = art.id
-    run.results = {"bytes": len(html), "env": str(venv) if venv else "worker"}
+    run.results = {"bytes": len(html), "env": str(venv) if venv else "worker", "code": True}
 
 
 def do_autograde(db: Session, run: GraderRun, sub: Submission) -> None:

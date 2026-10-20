@@ -351,6 +351,19 @@ def cmd_warm_cache(a: argparse.Namespace) -> None:
     raise SystemExit(warm(a))
 
 
+def cmd_rerender(a: argparse.Namespace) -> None:
+    """Re-render past submissions with their code; see grader.rerender."""
+    from grader.db import get_sessionmaker
+    from grader.rerender import pending, trickle
+
+    if a.check:
+        with get_sessionmaker()() as db:
+            print(f"{len(pending(db))} submission(s) have a render without code")
+        return
+    n = trickle(get_sessionmaker(), poll=a.poll, limit=a.limit)
+    print(f"re-rendered {n} submission(s)")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="grader")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -407,6 +420,14 @@ def main(argv: list[str] | None = None) -> None:
     warm.add_argument("--check", action="store_true", help="report gaps without downloading")
     warm.add_argument("--slug", help="warm only this assignment")
     warm.set_defaults(fn=cmd_warm_cache)
+    rr = sub.add_parser(
+        "rerender",
+        help="re-render past submissions so grading shows their code (runs only while the queue is idle)",
+    )
+    rr.add_argument("--check", action="store_true", help="count what is left, change nothing")
+    rr.add_argument("--limit", type=int, help="stop after this many")
+    rr.add_argument("--poll", type=float, default=5.0, help="seconds between queue checks")
+    rr.set_defaults(fn=cmd_rerender)
     ll = sub.add_parser(
         "login-link", help="print a one-time browser sign-in link for a NetID (operator use)"
     )

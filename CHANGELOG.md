@@ -13,6 +13,22 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Changed
+
+- **Renders show the code.** The worker renders submissions with
+  `--include-code`, so the grading view (and a student's own) shows each cell's
+  code above its output instead of only "passed". The submission view has
+  **Rendered** / **Code** tabs, the second being the source as submitted.
+  `grader rerender` re-renders older submissions one at a time while the queue
+  is otherwise idle.
+
+### Fixed
+
+- **A student is not refused for a line the course gave them.** The safety
+  scan now runs before grading and excuses a flagged line that appears, as
+  written, in the released copy. A thresholding release shipped `import io` in
+  its setup cell, and every submission from it failed before running.
+
 ## [0.1.4] — 2026-10-19
 
 ### Added

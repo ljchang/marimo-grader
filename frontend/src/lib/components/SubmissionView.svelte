@@ -1,8 +1,9 @@
 <script lang="ts">
-  // What a grader reads for one attempt: the worker's render when the assignment
-  // re-runs submissions, otherwise the submitted code. Either way, the files the
-  // student saved under storage.private()/<slug>/ -- the hand-in for notebooks too
-  // heavy to re-run -- flagged when they changed after the deadline.
+  // What a grader reads for one attempt: the worker's render (code above each
+  // output) when the assignment re-runs submissions, with the submitted source a
+  // click away; otherwise just the source. Either way, the files the student saved
+  // under storage.private()/<slug>/ -- the hand-in for notebooks too heavy to
+  // re-run -- flagged when they changed after the deadline.
   import { api, errorMessage, type Submission, type SubmissionFiles } from '$lib/api';
   import { fmtDateTime } from '$lib/format';
   import RenderFrame from './RenderFrame.svelte';
@@ -13,21 +14,33 @@
   let files = $state<SubmissionFiles | null>(null);
   let error = $state<string | null>(null);
 
-  const showCode = $derived(submission.renders === false);
+  const rerun = $derived(submission.renders !== false);
+  let tab = $state<'render' | 'code'>('render');
+  const showCode = $derived(!rerun || tab === 'code');
+
+  // A new attempt starts on the render; the source is fetched once, when first shown.
+  $effect(() => {
+    void submission.id;
+    tab = 'render';
+    code = null;
+  });
 
   $effect(() => {
     const id = submission.id;
-    const wantCode = showCode;
-    code = null;
+    if (!showCode || code !== null) return;
+    const ctl = new AbortController();
+    api.submissions
+      .notebook(id, ctl.signal)
+      .then((t) => (code = t))
+      .catch((e) => (error = errorMessage(e)));
+    return () => ctl.abort();
+  });
+
+  $effect(() => {
+    const id = submission.id;
     files = null;
     error = null;
     const ctl = new AbortController();
-    if (wantCode) {
-      api.submissions
-        .notebook(id, ctl.signal)
-        .then((t) => (code = t))
-        .catch((e) => (error = errorMessage(e)));
-    }
     api.submissions
       .files(id, ctl.signal)
       .then((f) => (files = f))
@@ -66,9 +79,16 @@
 
   {#if error}<p class="muted small">{error}</p>{/if}
 
+  {#if rerun}
+    <div class="tabs" role="tablist" aria-label="Submission view">
+      <button role="tab" aria-selected={tab === 'render'} class:on={tab === 'render'} onclick={() => (tab = 'render')}>Rendered</button>
+      <button role="tab" aria-selected={tab === 'code'} class:on={tab === 'code'} onclick={() => (tab = 'code')}>Code</button>
+    </div>
+  {/if}
+
   {#if showCode}
     <section class="code">
-      <h3>Submitted notebook <span class="muted small">(not re-run for this assignment)</span></h3>
+      {#if !rerun}<h3>Submitted notebook <span class="muted small">(not re-run for this assignment)</span></h3>{/if}
       {#if code === null}
         <p class="muted small">Loading…</p>
       {:else}
@@ -88,6 +108,25 @@
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tabs button {
+    font: inherit;
+    font-size: 13px;
+    padding: 4px 12px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .tabs button.on {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
   }
   .render {
     flex: 1;
