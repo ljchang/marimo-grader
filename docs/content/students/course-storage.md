@@ -17,9 +17,13 @@ private = storage.private()                 # yours, read-write
 
 path = course.local_path("data/sub-01/bold.nii.gz")   # an ordinary file path
 private.put("week3/results.pkl", results)   # .pkl, .npy, .csv, .json, .nii.gz by extension
+private.put("week3/map.nii.gz", brain)      # a nibabel image or nltools BrainData
+private.put("week3/map.png", fig)           # a figure: .png, .jpg, .svg, .pdf
 results = private.get("week3/results.pkl")
 private.ls("week3")
 ```
+
+`put()` picks the format from the file name. A figure can be a matplotlib figure or axes, a seaborn plot, or a nilearn plot. A table (`.csv`, `.tsv`) can be a pandas or polars DataFrame, an nltools DesignMatrix, or a numpy array; pandas row labels such as region names are kept, the plain 0, 1, 2… are not. To store a file you already wrote, use `private.upload("results.png", "week3/results.png")`.
 
 `local_path()` gives you a real file, so any library that reads files works with it. Once you are signed in, molab's **Files** panel lists the class copy and your own storage under *Remote storage*, where you can browse and download.
 

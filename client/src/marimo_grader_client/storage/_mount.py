@@ -6,9 +6,10 @@ cases read naturally::
 
     private.put("week3/betas.pkl", betas)         # pickle
     private.put("week3/betas.npy", array)         # numpy
-    private.put("week3/table.csv", df)            # pandas
+    private.put("week3/table.csv", df)            # pandas, polars, DesignMatrix, array
     private.put("week3/notes.json", {"k": 1})     # json
-    private.put("week3/mask.nii.gz", nib_image)   # nibabel
+    private.put("week3/mask.nii.gz", brain)       # nibabel image or nltools BrainData
+    private.put("week3/map.png", fig)             # a figure: .png .jpg .svg .pdf
     private.put("week3/raw.bin", b"...")          # bytes as-is
     private.put("week3/report.txt", "text")       # str as utf-8
 
@@ -19,6 +20,7 @@ materialised on first use and reused while the object is unchanged.
 from __future__ import annotations
 
 import fnmatch
+import gzip
 import io
 import json
 import os
@@ -212,6 +214,24 @@ def _ext(name: str) -> str:
     return os.path.splitext(low)[1]
 
 
+# Formats a str can't be the contents of: a str here is a file name passed by
+# mistake, which would otherwise be stored as the file.
+_BINARY = (
+    ".pkl",
+    ".pickle",
+    ".npy",
+    ".npz",
+    ".parquet",
+    ".nii",
+    ".nii.gz",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".pdf",
+)
+_FIGURE_FORMATS = {".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".svg": "svg", ".pdf": "pdf"}
+
+
 def _encode(name: str, obj) -> bytes:
     if isinstance(obj, (bytes, bytearray, memoryview)):
         return bytes(obj)
@@ -219,6 +239,11 @@ def _encode(name: str, obj) -> bytes:
         return obj.read_bytes()
     ext = _ext(name)
     if isinstance(obj, str):
+        if ext in _BINARY:
+            raise TypeError(
+                f"a str can't be stored as {name!r}; to store a file, pass Path({obj!r}) "
+                f"or use upload({obj!r}, {name!r})"
+            )
         return obj.encode()
     if ext in (".pkl", ".pickle"):
         return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
@@ -231,20 +256,66 @@ def _encode(name: str, obj) -> bytes:
         (np.save if ext == ".npy" else np.savez)(buf, obj)
         return buf.getvalue()
     if ext in (".csv", ".tsv"):
-        sep = "\t" if ext == ".tsv" else ","
-        return obj.to_csv(sep=sep, index=False).encode()
+        return _table_bytes(obj, "\t" if ext == ".tsv" else ",")
     if ext == ".parquet":
         buf = io.BytesIO()
         obj.to_parquet(buf)
         return buf.getvalue()
     if ext in (".nii", ".nii.gz"):
-        return obj.to_bytes()
+        # nltools BrainData converts itself; nibabel's to_bytes() is always
+        # uncompressed, so a .nii.gz name is gzipped here or nothing can read it.
+        img = obj.to_nifti() if hasattr(obj, "to_nifti") else obj
+        data = img.to_bytes()
+        return gzip.compress(data, compresslevel=6, mtime=0) if ext == ".nii.gz" else data
+    if ext in _FIGURE_FORMATS:
+        return _figure_bytes(obj, _FIGURE_FORMATS[ext], name)
     if ext in (".txt", ".md", ".py"):
         return str(obj).encode()
     raise TypeError(
         f"don't know how to store a {type(obj).__name__} as {name!r}; use a .pkl, .json, "
-        ".npy, .csv, .parquet or .nii.gz name, or pass bytes"
+        ".npy, .csv, .parquet, .nii.gz or .png name, or pass bytes"
     )
+
+
+def _table_bytes(obj, sep: str) -> bytes:
+    if hasattr(obj, "to_csv"):  # pandas
+        return obj.to_csv(sep=sep, index=_meaningful_index(obj)).encode()
+    if hasattr(obj, "write_csv"):  # polars, nltools DesignMatrix
+        buf = io.BytesIO()
+        obj.write_csv(buf, separator=sep)
+        return buf.getvalue()
+    if hasattr(obj, "__array__"):  # numpy: one column per array column, headed 0, 1, …
+        import numpy as np
+        import pandas as pd
+
+        return pd.DataFrame(np.asarray(obj)).to_csv(sep=sep, index=False).encode()
+    raise TypeError(f"don't know how to write a {type(obj).__name__} as a table; pass a DataFrame")
+
+
+def _meaningful_index(obj) -> bool:
+    """Keep row labels (region names, dates, a named index) but not the 0, 1, 2…
+    pandas adds, so a plain table reads back with the same columns."""
+    index = obj.index
+    return any(n is not None for n in index.names) or index.dtype.kind not in "iu"
+
+
+def _figure_bytes(obj, fmt: str, name: str) -> bytes:
+    """A matplotlib figure, or what carries one: an Axes or a seaborn grid
+    (``.figure``), a nilearn plot (``.frame_axes``). A PIL image saves itself."""
+    if hasattr(obj, "save") and hasattr(obj, "mode") and fmt != "svg":  # PIL
+        buf = io.BytesIO()
+        obj.save(buf, format=fmt.upper())
+        return buf.getvalue()
+    fig = getattr(obj, "figure", None)
+    if fig is None and hasattr(obj, "frame_axes"):
+        fig = obj.frame_axes.figure
+    if fig is None or not hasattr(fig, "savefig"):
+        raise TypeError(
+            f"don't know how to store a {type(obj).__name__} as {name!r}; pass a matplotlib figure"
+        )
+    buf = io.BytesIO()
+    fig.savefig(buf, format=fmt, bbox_inches="tight")
+    return buf.getvalue()
 
 
 def _decode(name: str, data: bytes):
