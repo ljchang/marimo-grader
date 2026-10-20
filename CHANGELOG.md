@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-10-19
+
 ### Changed
 
 - **Publish a new version from the assignment page, with the instructor
