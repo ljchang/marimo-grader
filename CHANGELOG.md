@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.10] — 2026-10-19
+
 ### Changed
 
 - **The assignments table shows where each assignment stands.** Rows are
