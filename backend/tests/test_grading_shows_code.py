@@ -40,7 +40,9 @@ def test_template_lines_are_excused_student_lines_are_not():
 def _render_ok(sub_id, code: bool):
     with dbmod.get_sessionmaker()() as db:
         sub = db.get(Submission, sub_id)
-        art = Artifact(kind="render", content_type="text/html", sha256="x" * 64, size=1, storage_key="r")
+        art = Artifact(
+            kind="render", content_type="text/html", sha256="x" * 64, size=1, storage_key="r"
+        )
         db.add(art)
         db.flush()
         sub.render_artifact_id = art.id
