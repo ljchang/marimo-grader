@@ -13,6 +13,23 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Changed
+
+- **Publish a new version from the assignment page, with the instructor
+  notebook alone.** The grader builds the student copy and reads the questions
+  as `grader publish` does (`services/student_copy.py`, now shared with the
+  CLI). A preview comes first -- the version number, the questions and how
+  each is graded, what is new, removed or changed, the student copy to
+  download -- and **Publish version N** makes it live
+  (`POST .../versions/preview`, `POST .../versions/from-notebook`). The hand
+  upload of two notebooks plus question JSON is gone from the page; its API
+  remains for the CLI.
+
+### Fixed
+
+- Version history times carry their UTC offset; they showed as hours in the
+  future on servers whose database returns naive timestamps.
+
 ## [0.1.8] — 2026-10-19
 
 ### Changed

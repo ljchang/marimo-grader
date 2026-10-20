@@ -192,6 +192,18 @@ export interface VersionUpload {
 export interface VersionResponse {
   version: number;
   student_url: string;
+  unchanged?: boolean;
+}
+
+/** What publishing an instructor notebook would do, before it is done. */
+export interface VersionPreview {
+  unchanged: boolean;
+  version: number;
+  questions: QuestionSpec[];
+  added: string[];
+  removed: string[];
+  changed: { qid: string; what: string[] }[];
+  student_notebook: string;
 }
 
 export interface Score {
@@ -777,6 +789,22 @@ export const api = {
       form.set('cell_hashes', JSON.stringify(upload.cell_hashes));
       return request<VersionResponse>(
         `/offerings/${enc(offeringId)}/assignments/${enc(assignmentId)}/versions`,
+        { method: 'POST', form },
+      );
+    },
+    previewVersion(offeringId: string, assignmentId: string, notebook: File): Promise<VersionPreview> {
+      const form = new FormData();
+      form.set('instructor_notebook', notebook);
+      return request<VersionPreview>(
+        `/offerings/${enc(offeringId)}/assignments/${enc(assignmentId)}/versions/preview`,
+        { method: 'POST', form },
+      );
+    },
+    publishFromNotebook(offeringId: string, assignmentId: string, notebook: File): Promise<VersionResponse> {
+      const form = new FormData();
+      form.set('instructor_notebook', notebook);
+      return request<VersionResponse>(
+        `/offerings/${enc(offeringId)}/assignments/${enc(assignmentId)}/versions/from-notebook`,
         { method: 'POST', form },
       );
     },

@@ -39,10 +39,11 @@ from grader.models import (
     User,
     new_id,
 )
-from grader.services import audit, availability, notebook_submission
+from grader.services import audit, availability, notebook_submission, student_copy
 from grader.services.artifacts import store
 from grader.services.grades import POLICIES
 from grader.services.notebook_meta import inject_grader_keys, leaked_markers
+from grader.util import iso
 
 router = APIRouter(tags=["offerings"])
 
@@ -289,7 +290,7 @@ def list_versions(
         {
             "id": str(v.id),
             "version": v.version,
-            "created_at": v.created_at.isoformat(),
+            "created_at": iso(v.created_at),
             "published_by": (u.netid if (u := db.get(User, v.published_by)) else None),
             "questions": [q.get("qid") for q in (v.question_snapshot or [])],
             "student_url": f"/api/v1/assignment-versions/{v.id}/student.py",
@@ -362,6 +363,94 @@ async def publish_version(
         client_hashes = json.loads(cell_hashes)
     except (ValueError, TypeError) as e:
         raise api_error(422, "bad_json", f"questions/cell_hashes must be JSON: {e}") from e
+    inst_bytes = await instructor_notebook.read()
+    student_text = (await student_notebook.read()).decode("utf-8", "replace")
+    return _publish(db, m, a, inst_bytes, student_text, qs, client_hashes)
+
+
+def _build(a: Assignment, upload: UploadFile, inst_bytes: bytes) -> tuple[str, list[QuestionIn]]:
+    """What ``grader publish`` makes from an instructor notebook, made here."""
+    text = inst_bytes.decode("utf-8", "replace")
+    try:
+        student = student_copy.generate_student(text, upload.filename or "notebook.py")
+        raw = student_copy.questions_from(text, optional=notebook_submission.enabled(a))
+    except student_copy.BuildError as e:
+        raise api_error(422, e.code, e.message) from e
+    return student, [QuestionIn.model_validate(q) for q in raw]
+
+
+@router.post("/offerings/{offering_id}/assignments/{assignment_id}/versions/preview")
+async def preview_version(
+    assignment_id: uuid.UUID,
+    instructor_notebook: UploadFile = File(...),
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    """What publishing this instructor notebook would do, without doing it: the
+    questions it defines, how they differ from the live ones, and the student
+    copy. Refuses (422) exactly where publishing would."""
+    a = db.get(Assignment, assignment_id)
+    if a is None or a.offering_id != m.offering.id:
+        raise api_error(404, "not_found", "assignment not found")
+    inst_bytes = await instructor_notebook.read()
+    student, qs = _build(a, instructor_notebook, inst_bytes)
+    _check_questions(a, qs)
+    payload = [q.model_dump(mode="json") for q in qs]
+    latest = a.versions[-1] if a.versions else None
+    unchanged = bool(
+        latest
+        and (latest.cell_hashes or {}).get("publish_fingerprint")
+        == _fingerprint(inst_bytes, payload)
+    )
+    live = {q.qid: q for q in a.questions if q.active and q.qid != notebook_submission.NOTEBOOK_QID}
+    new = {q.qid: q for q in qs}
+    changed = []
+    for qid, q in new.items():
+        old = live.get(qid)
+        if old is None:
+            continue
+        what = []
+        if float(old.max_points) != q.max_points:
+            what.append(f"points {float(old.max_points):g} → {q.max_points:g}")
+        if old.grading_mode != q.grading_mode:
+            what.append(f"graded {old.grading_mode.value} → {q.grading_mode.value}")
+        if old.title != q.title:
+            what.append("title")
+        if what:
+            changed.append({"qid": qid, "what": what})
+    return {
+        "unchanged": unchanged,
+        "version": latest.version
+        if unchanged and latest
+        else (latest.version + 1 if latest else 1),
+        "questions": payload,
+        "added": [qid for qid in new if qid not in live],
+        "removed": [qid for qid in live if qid not in new],
+        "changed": changed,
+        "student_notebook": student,
+    }
+
+
+@router.post(
+    "/offerings/{offering_id}/assignments/{assignment_id}/versions/from-notebook",
+    status_code=201,
+)
+async def publish_from_notebook(
+    assignment_id: uuid.UUID,
+    instructor_notebook: UploadFile = File(...),
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    """Publish from the instructor notebook alone, as ``grader publish`` does."""
+    a = db.get(Assignment, assignment_id)
+    if a is None or a.offering_id != m.offering.id:
+        raise api_error(404, "not_found", "assignment not found")
+    inst_bytes = await instructor_notebook.read()
+    student, qs = _build(a, instructor_notebook, inst_bytes)
+    return _publish(db, m, a, inst_bytes, student, qs, {})
+
+
+def _check_questions(a: Assignment, qs: list[QuestionIn]) -> None:
     if any(q.qid == notebook_submission.NOTEBOOK_QID for q in qs):
         raise api_error(
             422,
@@ -375,8 +464,24 @@ async def publish_version(
             "at least one question is required (or turn on notebook_submission)",
         )
 
-    inst_bytes = await instructor_notebook.read()
-    student_text = (await student_notebook.read()).decode("utf-8", "replace")
+
+def _fingerprint(inst_bytes: bytes, question_payload: list[dict]) -> str:
+    # Titles are presentation only: changing one updates the question in place and
+    # does not create a new version.
+    structural = [{k: v for k, v in q.items() if k != "title"} for q in question_payload]
+    return hashlib.sha256(inst_bytes + json.dumps(structural, sort_keys=True).encode()).hexdigest()
+
+
+def _publish(
+    db: Session,
+    m: Membership,
+    a: Assignment,
+    inst_bytes: bytes,
+    student_text: str,
+    qs: list[QuestionIn],
+    client_hashes: dict,
+):
+    _check_questions(a, qs)
     leaked = leaked_markers(student_text)
     if leaked:
         raise api_error(
@@ -385,12 +490,7 @@ async def publish_version(
 
     course, term = a.offering.course.slug, a.offering.term
     question_payload = [q.model_dump(mode="json") for q in qs]
-    # Titles are presentation only: changing one updates the question in place and
-    # does not create a new version.
-    structural = [{k: v for k, v in q.items() if k != "title"} for q in question_payload]
-    fingerprint = hashlib.sha256(
-        inst_bytes + json.dumps(structural, sort_keys=True).encode()
-    ).hexdigest()
+    fingerprint = _fingerprint(inst_bytes, question_payload)
     if a.versions:
         latest = a.versions[-1]
         if (latest.cell_hashes or {}).get("publish_fingerprint") == fingerprint:
