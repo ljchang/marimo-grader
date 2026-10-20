@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-10-19
+
 ### Changed
 
 - **Renders show the code.** The worker renders submissions with
