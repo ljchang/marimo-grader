@@ -19,6 +19,16 @@ When there is nothing, it says so in one line.
 
 Below it, **Class progress** is a grid of students by question for the selected assignment. A cell shows the points earned, *waiting* for an ungraded submission, *failed* for a grading failure, or a dash. The footer tallies each column. Clicking a student opens their attempt history; clicking a hand-graded question's header opens its queue. The page updates itself as submissions arrive.
 
+## The assignments page
+
+**Assignments** lists every assignment, grouped into *Open now*, *Coming up* and *Closed* (folded away until you open it). Each row shows the one date that matters next -- *Due in 5 days*, *Opens Nov 18*, *Closed* -- the class's progress as a bar (graded, waiting for you, failed, not submitted), and the average score over students whose work is fully graded. Labels appear only for what is unusual: *Hidden from students* (private, with no open date yet), *Enrolled only*, *Not re-run*.
+
+**Grade** shows how many answers are waiting for you and goes straight to the queue when only one question has them; **Review** opens the assignment when everything is graded automatically. **Settings** opens the assignment's settings in a side panel. **More** has *Copy student link*, *Preview as a student*, *Upload corrected notebook* and *Export to Canvas*. The filters above the table narrow it to what needs grading, or to one group; search matches the title.
+
+Click a row to select it, and shift-click to select a run of rows; **Select all** takes every row shown. The bar that appears at the bottom exports the selection to Canvas or changes their due date at once.
+
+Click an assignment's title for its page: a sentence on where it stands, and under **Grading** one row per question with a strip of marks, one per enrolled student, colored by where that student stands. Click a mark to open that student's answer in the queue.
+
 ## The grading queue
 
 Each hand-graded or hybrid question has a queue: one entry per student, showing their latest attempt, ungraded ones first and oldest first.

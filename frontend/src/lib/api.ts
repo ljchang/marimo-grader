@@ -99,6 +99,29 @@ export interface AssignmentSettings {
 }
 
 /** Server-computed window, so every client agrees on "open" without clock math. */
+/** Where one student stands on one question (services/progress.py). */
+export type ProgressState = 'graded' | 'waiting' | 'failed' | 'running' | 'none';
+export type ProgressCounts = Record<ProgressState, number>;
+
+export interface AssignmentProgress {
+  /** Students by their most pressing state across the assignment's questions. */
+  students: ProgressCounts;
+  submitted: number;
+  /** Answers waiting for a person to grade. */
+  to_grade: number;
+  /** Mean percent over students whose work is fully graded. */
+  average: number | null;
+  averaged_over: number;
+  questions: Record<string, { counts: ProgressCounts; marks?: ProgressState[] }>;
+}
+
+export interface Progress {
+  roster: number;
+  /** Present when asked for one assignment: the order of every `marks` list. */
+  students: { netid: string; display_name: string | null }[] | null;
+  assignments: Record<string, AssignmentProgress>;
+}
+
 export interface Availability {
   state: 'upcoming' | 'open' | 'closed';
   visibility: Visibility;
@@ -846,6 +869,12 @@ export const api = {
   grading: {
     triage(offeringId: string, signal?: AbortSignal): Promise<Triage> {
       return request<Triage>(`/offerings/${enc(offeringId)}/triage`, { signal });
+    },
+    progress(offeringId: string, assignmentId?: string, signal?: AbortSignal): Promise<Progress> {
+      return request<Progress>(`/offerings/${enc(offeringId)}/progress`, {
+        query: { assignment_id: assignmentId },
+        signal,
+      });
     },
     grid(offeringId: string, assignmentId?: string, signal?: AbortSignal): Promise<Grid> {
       return request<Grid>(`/offerings/${enc(offeringId)}/grid`, {

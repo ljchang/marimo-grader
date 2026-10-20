@@ -13,6 +13,35 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Changed
+
+- **The assignments table shows where each assignment stands.** Rows are
+  grouped into Open now, Coming up and Closed (folded); one When column gives
+  the date that matters next; a bar shows the class's progress (graded, waiting
+  for you, failed, not submitted) and an Average column the mean score of
+  students whose work is fully graded. Only the unusual gets a label: Hidden
+  from students, Enrolled only, Not re-run. Each row has **Grade** (with the
+  count waiting, straight to the queue when one question has them) or
+  **Review**, **Settings** and **More** (copy student link, preview as a
+  student, upload a corrected notebook, export to Canvas). Filters and a
+  search sit above it. Rows are selected by clicking them (shift-click for a
+  run); a bar at the bottom exports the selection or changes its due date.
+- **The assignment page is down to what is used.** A sentence on where it
+  stands, then one row per question with a strip of marks, one per student,
+  colored by state; a mark opens that student's answer in the queue
+  (`/grade/<question>?netid=`). The settings summary, student links and
+  version history are gone from the page: Settings is a side panel, shared
+  with the table, and the rest is under More.
+- **Settings are grouped** into When, Who and where, and Attempts and grading,
+  with the title editable alongside.
+
+### Added
+
+- `GET /offerings/{id}/progress[?assignment_id=]`: each student's state on
+  each question (graded, waiting, failed, running, none), counted per question
+  and per assignment, with the answers to grade and the average; with an
+  assignment, the per-student marks in roster order (`services/progress.py`).
+
 ## [0.1.9] — 2026-10-19
 
 ### Changed

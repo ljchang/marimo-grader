@@ -11,7 +11,7 @@
   import { auth } from '$lib/auth.svelte';
   import { subscribeEvents, type StreamState } from '$lib/events';
   import { fmtDateTime, fmtRelative, trim } from '$lib/format';
-  import type { Params } from '$lib/router.svelte';
+  import { router, type Params } from '$lib/router.svelte';
   import Notice from '$lib/components/Notice.svelte';
   import Loading from '$lib/components/Loading.svelte';
   import SubmissionView from '$lib/components/SubmissionView.svelte';
@@ -98,8 +98,10 @@
         if (q) question = { ...q, assignment: a, rubric: queue.question.rubric ?? q.rubric };
       }
       items = queue.items.map((s) => ({ ...s, done: false }));
-      index = 0;
-      resetForm(items[0] ?? null);
+      // A mark on the assignment page opens one student's answer.
+      const netid = router.query.get('netid');
+      index = Math.max(0, netid ? items.findIndex((s) => s.netid === netid) : 0);
+      resetForm(items[index] ?? null);
     } catch (err) {
       error = errorMessage(err);
     } finally {
