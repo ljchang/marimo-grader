@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-10-19
+
 ### Security
 
 - **The safety scan excuses only findings the release also had.** 0.1.5
