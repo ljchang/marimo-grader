@@ -13,6 +13,14 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Security
+
+- **The safety scan excuses only findings the release also had.** 0.1.5
+  excused a flagged line whenever its text appeared anywhere in the released
+  copy, so a line the release merely contained (in a string, say) could cover
+  a student's import. A finding is now excused only when the released copy was
+  flagged for the same thing on an identical line.
+
 ## [0.1.5] — 2026-10-19
 
 ### Changed
