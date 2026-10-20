@@ -12,6 +12,7 @@
   import StudentHistory from './routes/StudentHistory.svelte';
   import Roster from './routes/Roster.svelte';
   import Assignments from './routes/Assignments.svelte';
+  import AssignmentDetail from './routes/AssignmentDetail.svelte';
   import Audit from './routes/Audit.svelte';
   import StudentPortal from './routes/StudentPortal.svelte';
   import Admin from './routes/Admin.svelte';
@@ -38,6 +39,7 @@
     { pattern: '/o/:offering/students/:netid', component: StudentHistory, access: 'staff' },
     { pattern: '/o/:offering/roster', component: Roster, access: 'instructor' },
     { pattern: '/o/:offering/assignments', component: Assignments, access: 'instructor' },
+    { pattern: '/o/:offering/assignments/:assignment', component: AssignmentDetail, access: 'instructor' },
     { pattern: '/o/:offering/audit', component: Audit, access: 'instructor' },
     { pattern: '/me/:offering', component: StudentPortal, access: 'enrolled' },
   ];
