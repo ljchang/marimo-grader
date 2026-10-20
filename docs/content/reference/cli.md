@@ -48,6 +48,15 @@ grader warm-cache [--check] [--slug SLUG]
 
 Run it after every deploy and after publishing an assignment that touches new data. Run it in the **worker** container, which is where the cache lives. [Sandbox and data](../operators/sandbox-and-data.md#the-dataset-cache) explains where the file list comes from.
 
+## `grader rerender`
+
+Re-renders past submissions so the grading view shows their code (renders before 0.1.5 left it out). It adds one render at a time and only while no other run is queued or running, so it never holds up new submissions; stop it at any time and run it again to carry on. A re-render that fails keeps the previous render.
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm worker grader rerender --check   # how many are left
+docker compose -f docker-compose.prod.yml run -d --rm worker grader rerender        # in the background
+```
+
 ## `grader seed`
 
 Create a course, an offering, an instructor — also made a platform admin — and optional students. Idempotent.

@@ -87,6 +87,29 @@ def nothing_ran_reason(result, auto_points_max: float) -> str | None:
     )
 
 
+def student_safety_findings(source: str, released: str | None) -> list[str]:
+    """MoGrader's safety scan, counting only what the student wrote.
+
+    A flagged line that also appears, as written, in the notebook the student
+    was given came from the course, not from them: an assignment once shipped
+    ``import io`` in its setup cell, and every submission from that copy was
+    refused before it ran. Those lines are excused; anything the student added
+    is still refused. Without the released copy, nothing is excused.
+    """
+    from mograder.grading.safety import check_safety
+
+    result = check_safety(source)
+    if result.safe:
+        return []
+    given = {ln.strip() for ln in (released or "").splitlines() if ln.strip()}
+    lines = source.splitlines()
+    return [
+        f.description
+        for f in result.findings
+        if not (0 < f.line <= len(lines) and lines[f.line - 1].strip() in given)
+    ]
+
+
 def grade(db: Session, sub: Submission) -> GradeResult:
     try:
         from mograder.grading import integrity
@@ -116,6 +139,7 @@ def grade(db: Session, sub: Submission) -> GradeResult:
     # match. Diff against the release instead: that is what they actually received,
     # and a difference there is a real edit. (mograder's own hub compares this way.)
     tampered: list[str] = []
+    release_text = None
     if release_art is not None:
         release_text = store().get(release_art).decode()
         real = integrity.check_integrity(release_text, submitted_text)
@@ -131,6 +155,9 @@ def grade(db: Session, sub: Submission) -> GradeResult:
     # Data read from a plain URL: use the copy warm-cache fetched (the sandbox has
     # no network). See grader.url_cache.
     fixed = rewrite_urls(fixed)
+    unsafe = student_safety_findings(fixed, release_text)
+    if unsafe:
+        raise RuntimeError(f"notebook execution failed: safety check failed: {'; '.join(unsafe)}")
     # Build (or reuse) the notebook's environment *outside* bubblewrap: inside the
     # sandbox the filesystem is read-only and there is no network, so marimo must
     # run with --no-sandbox against a prepared venv.
@@ -151,7 +178,7 @@ def grade(db: Session, sub: Submission) -> GradeResult:
                 nb,
                 timeout=TIMEOUT,
                 sandbox_dir=venv,
-                safety_check=True,
+                safety_check=False,  # done above, without blaming students for our lines
                 isolate_cwd=False,
                 use_bubblewrap=USE_BWRAP,
                 rlimit_as=RLIMIT_AS,

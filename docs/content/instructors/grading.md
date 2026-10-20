@@ -27,7 +27,7 @@ Each hand-graded or hybrid question has a queue: one entry per student, showing 
 
 The rendered notebook fills the left pane; the right pane holds the score, the feedback box, and any written answers the student submitted.
 
-The left pane is the student's notebook, rendered by the grader after execution, with the outputs they saw. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
+The left pane is the student's notebook, rendered by the grader after execution: each cell's code above the output it produced, so you read the answer and not only whether a check passed. **Code** switches to the notebook source exactly as submitted. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 
 The right pane holds the score. If the question has a rubric, each item has its own points and the total sums them; you can override the total. Feedback is a free text box the student sees.
 

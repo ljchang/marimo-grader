@@ -50,6 +50,8 @@ See [SAML](../auth/saml.md#when-something-is-wrong) for identity-provider sympto
 
 **"Notebook execution failed" on everything for one assignment.** Almost always a cold dataset cache — see [Sandbox and data](sandbox-and-data.md#the-dataset-cache). Run `grader warm-cache --check` for that slug; it exits non-zero and names what is missing.
 
+**"safety check failed: denied import: …".** The grader's safety scan refused the notebook before running it. A flagged line that is also in the copy the student was given is excused (it came from the course, not from them), so this means the student added it. Retrying will fail the same way; the student needs to remove it and resubmit.
+
 **"Notebook execution failed" on one student's submission.** Usually their code: an infinite loop against the timeout, or memory against `GRADER_RLIMIT_AS`. The error is on the course page; **Retry** re-queues it.
 
 **Everything fails since a new host.** Run the bubblewrap check in [Sandbox and data](sandbox-and-data.md#the-worker-sandbox). Docker's defaults block what the sandbox needs.
