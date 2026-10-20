@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-10-19
+
 ### Changed
 
 - **Assignments is a table.** One row per assignment with its access, status,
