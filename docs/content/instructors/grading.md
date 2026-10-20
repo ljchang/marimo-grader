@@ -13,7 +13,7 @@ The screenshot shows a course with one assignment open and nothing waiting: the 
 - submissions waiting for a grade, per question, with a **Grade now** button;
 - students with no activity for a week while an assignment is open;
 - checks that more than a third of the class has been failing in the last two days;
-- submissions the autograder could not run, with a **Retry** button.
+- submissions the autograder could not run, one entry per cause, with what to do about it.
 
 When there is nothing, it says so in one line.
 
@@ -60,7 +60,12 @@ Autograded points and hand-entered points add up to the question's total. An ass
 
 ## Retrying failed grading
 
-If the autograder could not run a submission (a timeout, a package the sandbox could not build, a crash), the course page lists it under grader failures with the error. **Retry** re-queues it. If it fails again the error message is the place to start; the operator can read the full log on the server.
+If the autograder could not run a submission, the course page groups it with every other submission of that assignment that failed for the same reason: twenty copies of one error are one problem. Each entry says what happened in plain words, whose move it is, and whether a retry can help; **Error as recorded** shows the raw message.
+
+- **The student's move** -- the safety check refused something they wrote, or the notebook cannot run (a variable defined in two cells, a syntax error). A retry runs the same notebook and fails the same way, so the button reads **Retry anyway**; the student needs to fix and resubmit.
+- **The grader's move** -- a timeout, data the sandbox could not reach (ask the operator to run `grader warm-cache`), a package that would not install, or an unexpected error. **Retry** (or **Retry all**) is worth trying.
+
+After a retry the entry stays on the page and follows each submission: *queued*, *grading*, then *graded*, *graded automatically, waiting for you* (a question you grade by hand), or *failed again* with the new reason. **Clear results** removes the finished rows.
 
 ## Attempt limits and regrading
 
