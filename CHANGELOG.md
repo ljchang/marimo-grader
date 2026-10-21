@@ -13,6 +13,19 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Added
+
+- **Rubrics.** A question graded by hand can carry a rubric: **Add a rubric**
+  on the assignment page takes an outline (parts at the margin, items
+  indented under them, 1 point each unless an item ends in "(2 points)"),
+  pasted from a document if you like, and shows the items it makes before you
+  save. In the grading queue each item gets its own score, grouped under its
+  part with a subtotal, and **Full marks for the blank items** lets you start
+  from full marks and take points off. The whole-notebook question is worth
+  what its rubric adds up to. Only instructors and TAs see a rubric; scores
+  outside an item's range, or for an item the rubric does not have, are
+  refused.
+
 ### Fixed
 
 - **Client 0.2.4: `put()` stores figures, brain maps and more tables.** A

@@ -3,7 +3,14 @@
   import { ENVIRONMENTS, POLICIES, type SettingsForm } from '$lib/assignmentSettings';
   import { fmtPolicy } from '$lib/format';
 
-  let { form = $bindable() }: { form: SettingsForm } = $props();
+  let {
+    form = $bindable(),
+    rubricPoints = null,
+  }: {
+    form: SettingsForm;
+    /** The notebook's rubric total, which fixes its points; null without a rubric. */
+    rubricPoints?: number | null;
+  } = $props();
 
   const exam = $derived(form.visibility === 'enrolled');
   const policyLabel = (p: (typeof POLICIES)[number]) => {
@@ -83,8 +90,13 @@
   </label>
   {#if form.notebook_submission}
     <label class="line">
-      <span>Notebook points<small>0 makes it a receipt</small></span>
-      <input type="number" min="0" step="1" bind:value={form.notebook_points} />
+      {#if rubricPoints != null}
+        <span>Notebook points<small>The total of its rubric; edit the rubric to change it</small></span>
+        <input type="number" value={rubricPoints} readonly />
+      {:else}
+        <span>Notebook points<small>0 makes it a receipt</small></span>
+        <input type="number" min="0" step="1" bind:value={form.notebook_points} />
+      {/if}
     </label>
   {/if}
   <label class="check">

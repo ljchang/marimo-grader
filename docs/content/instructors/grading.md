@@ -39,7 +39,23 @@ The rendered notebook fills the left pane; the right pane holds the score, the f
 
 The left pane is the student's notebook, rendered by the grader after execution: each cell's code above the output it produced, so you read the answer and not only whether a check passed. **Code** switches to the notebook source exactly as submitted. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 
-The right pane holds the score. If the question has a rubric, each item has its own points and the total sums them; you can override the total. Feedback is a free text box the student sees.
+The right pane holds the score. If the question has a rubric, each item has its own points, grouped under its part with a subtotal, and the total sums them; you can override the total. **Full marks for the blank items** fills every item you have not scored, so you can start from full marks and take points off. Feedback is a free text box the student sees.
+
+### Rubrics
+
+Any question graded by hand can have one: **Add a rubric** next to the question on the assignment page. Write it as an outline, or paste one from a document:
+
+```text
+Short answer (5 points)
+Group analysis
+    Load and smooth the data
+    Build the design matrix
+    Correct for multiple comparisons (2 points)
+```
+
+A line at the margin starts a part and indented lines under it are its items, worth 1 point each unless they end in "(N points)". A part with no items is scored as one. Numbering such as `3.` or `a)` is dropped. The panel shows the items and the total before you save. A rubric on the whole-notebook question sets its points; on any other question it has to fit in the question's hand-graded points. Students never see the rubric, only their score and feedback.
+
+Scores are stored by each item's position (`3.4` is the fourth item of the third part), so once grading has started, add items at the end of a part rather than in the middle.
 
 /// admonition | "Release this grade to the student" does not withhold it
     type: warning

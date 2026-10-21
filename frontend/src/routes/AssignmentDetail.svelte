@@ -2,7 +2,7 @@
   // One assignment, for its instructor: where it stands, and where the class
   // stands on each question. Everything else is in Settings or More.
   import { onMount } from 'svelte';
-  import { api, errorMessage, type Assignment, type Progress, type ProgressState } from '$lib/api';
+  import { api, errorMessage, type Assignment, type Progress, type ProgressState, type Question } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
   import {
     copyStudentLink,
@@ -20,6 +20,7 @@
   import Loading from '$lib/components/Loading.svelte';
   import MoreMenu from '$lib/components/MoreMenu.svelte';
   import Notice from '$lib/components/Notice.svelte';
+  import RubricPanel from '$lib/components/RubricPanel.svelte';
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
   import UploadNotebookPanel from '$lib/components/UploadNotebookPanel.svelte';
 
@@ -35,6 +36,7 @@
   let message = $state<string | null>(null);
   let showSettings = $state(false);
   let showUpload = $state(false);
+  let rubricFor = $state<Question | null>(null);
 
   async function load() {
     try {
@@ -93,6 +95,10 @@
       : mode === 'hybrid'
         ? 'partly graded by hand'
         : 'graded automatically';
+
+  /** A rubric needs points someone scores by hand. */
+  const takesRubric = (q: Question) =>
+    q.max_points > 0 && (a?.settings.autograde === false || q.grading_mode !== 'auto');
 
   const menu = $derived(
     a
@@ -161,13 +167,20 @@
               <div class="q-title">
                 {#if q.qid === 'notebook'}Whole notebook{:else}<span class="mono qid">{q.qid}</span>{q.title === q.qid ? '' : q.title}{/if}
               </div>
-              <div class="muted small">{trim(q.max_points)} {q.max_points === 1 ? 'point' : 'points'}, {graded(q.grading_mode)}</div>
+              <div class="muted small">
+                {trim(q.max_points)} {q.max_points === 1 ? 'point' : 'points'}, {graded(q.grading_mode)}{q.rubric_id ? ' with a rubric' : ''}
+              </div>
             </div>
-            {#if qp && qp.counts.waiting > 0}
-              <a class="btn primary" href="/o/{offeringId}/grade/{q.id}">Grade {qp.counts.waiting}</a>
-            {:else if qp && qp.counts.none < roster}
-              <a class="btn" href="/o/{offeringId}/grade/{q.id}">Review answers</a>
-            {/if}
+            <div class="row">
+              {#if takesRubric(q)}
+                <button class="quiet" onclick={() => (rubricFor = q)}>{q.rubric_id ? 'Edit rubric' : 'Add a rubric'}</button>
+              {/if}
+              {#if qp && qp.counts.waiting > 0}
+                <a class="btn primary" href="/o/{offeringId}/grade/{q.id}">Grade {qp.counts.waiting}</a>
+              {:else if qp && qp.counts.none < roster}
+                <a class="btn" href="/o/{offeringId}/grade/{q.id}">Review answers</a>
+              {/if}
+            </div>
           </div>
           {#if marks.length}
             <div class="strip" style:--n={marks.length}>
@@ -207,6 +220,19 @@
       onsaved={() => {
         showSettings = false;
         message = 'Settings saved.';
+        void load();
+      }}
+    />
+  {/if}
+
+  {#if rubricFor}
+    <RubricPanel
+      {offeringId}
+      question={rubricFor}
+      onclose={() => (rubricFor = null)}
+      onsaved={(m) => {
+        rubricFor = null;
+        message = m;
         void load();
       }}
     />

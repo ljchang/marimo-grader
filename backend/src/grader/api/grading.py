@@ -371,6 +371,15 @@ def score_submission(
         raise api_error(403, "forbidden", "TAs may not finalize grades in this offering")
 
     q = sub.question
+    if q.rubric is not None:
+        limits = {i["key"]: float(i["points"]) for i in q.rubric.items or []}
+        for key, v in body.rubric_scores.items():
+            if key not in limits:
+                raise api_error(422, "unknown_rubric_item", f"no rubric item {key!r}")
+            if not (0 <= v <= limits[key] + 1e-9):
+                raise api_error(
+                    422, "out_of_range", f"rubric item {key!r} takes 0 to {limits[key]:g}"
+                )
     manual = body.manual_points
     if manual is None and body.rubric_scores:
         manual = sum(body.rubric_scores.values())

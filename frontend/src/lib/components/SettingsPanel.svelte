@@ -25,6 +25,9 @@
   // svelte-ignore state_referenced_locally
   let form = $state(toForm(assignment.settings));
   let busy = $state(false);
+  const rubricPoints = $derived(
+    assignment.questions.find((q) => q.qid === 'notebook' && q.rubric_id)?.max_points ?? null,
+  );
   let error = $state<string | null>(null);
 
   async function save(e: SubmitEvent) {
@@ -46,7 +49,7 @@
   <form id="settings-form" onsubmit={save}>
     {#if error}<Notice kind="error" label="Not saved">{error}</Notice>{/if}
     <label class="line"><span>Title</span><input required bind:value={title} /></label>
-    <SettingsFields bind:form />
+    <SettingsFields bind:form {rubricPoints} />
   </form>
   {#snippet footer()}
     <button class="primary" type="submit" form="settings-form" disabled={busy}>{busy ? 'Saving…' : 'Save settings'}</button>
