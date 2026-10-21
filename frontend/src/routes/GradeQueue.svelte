@@ -12,6 +12,7 @@
   import { subscribeEvents, type StreamState } from '$lib/events';
   import { fmtDateTime, fmtRelative, trim } from '$lib/format';
   import { router, type Params } from '$lib/router.svelte';
+  import { groupRubric } from '$lib/rubricText';
   import Notice from '$lib/components/Notice.svelte';
   import Loading from '$lib/components/Loading.svelte';
   import SubmissionView from '$lib/components/SubmissionView.svelte';
@@ -48,6 +49,8 @@
   const rubric = $derived<RubricItem[]>(current?.rubric ?? question?.rubric ?? []);
   const maxPoints = $derived(current?.max_points ?? question?.max_points ?? null);
   const doneCount = $derived(items.filter((i) => i.done).length);
+  const rubricGroups = $derived(groupRubric(rubric));
+  const blanks = $derived(rubric.filter((r) => rubricScores[r.key] == null).length);
   const rubricSum = $derived(
     rubric.reduce((sum, r) => sum + (rubricScores[r.key] ?? 0), 0),
   );
@@ -194,6 +197,11 @@
     }
   }
 
+  /** Start from full marks and take points off. */
+  function fillBlanks() {
+    for (const r of rubric) if (rubricScores[r.key] == null) rubricScores[r.key] = r.max_points;
+  }
+
   function clampRubric(r: RubricItem) {
     const v = rubricScores[r.key];
     if (v === null || v === undefined) return;
@@ -260,10 +268,23 @@
 
         <form onsubmit={(e) => { e.preventDefault(); void submit(); }}>
           {#if rubric.length > 0}
+            <!-- Stays put when there is nothing left to fill, so the rows below don't jump. -->
+            <button type="button" class="quiet small fill" onclick={fillBlanks} disabled={blanks === 0}>
+              Full marks for the {blanks === rubric.length || blanks === 0 ? '' : `${blanks} `}blank {blanks === 1 ? 'item' : 'items'}
+            </button>
             <table class="rubric">
+              {#each rubricGroups as g, gi (gi)}
               <tbody>
-                {#each rubric as r (r.key)}
+                {#if g.label && !(g.items.length === 1 && g.items[0]?.title === g.label)}
+                  <tr class="part">
+                    <th colspan="2">{g.label}</th>
+                    <td class="num">{trim(g.items.reduce((sum, r) => sum + (rubricScores[r.key] ?? 0), 0))}</td>
+                    <td class="muted num small">/ {trim(g.total)}</td>
+                  </tr>
+                {/if}
+                {#each g.items as r (r.key)}
                   <tr>
+                    <td class="mono muted small key">{r.key}</td>
                     <td class="wrap">
                       <label for="r-{r.key}">{r.title}</label>
                       {#if r.description}<span class="sub muted small">{r.description}</span>{/if}
@@ -283,6 +304,7 @@
                   </tr>
                 {/each}
               </tbody>
+              {/each}
             </table>
           {/if}
 
@@ -438,6 +460,25 @@
   }
   table.rubric td.wrap {
     white-space: normal;
+  }
+  table.rubric .part th,
+  table.rubric .part td {
+    padding-top: 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  table.rubric .part td {
+    white-space: nowrap;
+  }
+  table.rubric .part td.num {
+    text-align: right;
+  }
+  table.rubric td.key {
+    width: 2.5em;
+    padding-right: 6px;
+  }
+  button.fill {
+    margin-bottom: 6px;
   }
   table.rubric td .sub {
     display: block;

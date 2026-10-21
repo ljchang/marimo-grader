@@ -140,7 +140,7 @@ interface RawQueue {
     max_points: number;
     auto_points_max: number;
     grading_mode: GradingMode;
-    rubric: { id: string; name: string; items: { key: string; label?: string; points: number; description?: string }[] } | null;
+    rubric: { id: string; name: string; items: RubricSpec[] } | null;
   };
   items: Submission[];
 }
@@ -163,6 +163,23 @@ export interface RubricItem {
   title: string;
   max_points: number;
   description?: string;
+  /** The part of the rubric the item belongs to, shown as a heading in the queue. */
+  group?: string;
+}
+
+/** A rubric item as the server stores it. */
+export interface RubricSpec {
+  key: string;
+  label: string;
+  points: number;
+  group?: string;
+  description?: string;
+}
+
+export interface Rubric {
+  question_id: string;
+  items: RubricSpec[];
+  total: number;
 }
 
 export interface Question {
@@ -172,6 +189,7 @@ export interface Question {
   max_points: number;
   grading_mode: GradingMode;
   order: number;
+  rubric_id?: string | null;
   rubric?: RubricItem[];
 }
 
@@ -831,6 +849,15 @@ export const api = {
         { method: 'POST', form },
       );
     },
+    rubric(offeringId: string, questionId: string, signal?: AbortSignal): Promise<Rubric> {
+      return request<Rubric>(`/offerings/${enc(offeringId)}/questions/${enc(questionId)}/rubric`, { signal });
+    },
+    setRubric(offeringId: string, questionId: string, items: RubricSpec[]): Promise<Rubric> {
+      return request<Rubric>(`/offerings/${enc(offeringId)}/questions/${enc(questionId)}/rubric`, {
+        method: 'PUT',
+        body: { items },
+      });
+    },
     studentNotebookUrl(versionId: string): string {
       return url(`/assignment-versions/${enc(versionId)}/student.py`);
     },
@@ -892,6 +919,7 @@ export const api = {
         title: r.label ?? r.key,
         max_points: r.points,
         description: r.description,
+        group: r.group,
       }));
       return { question: { ...raw.question, rubric }, items: raw.items };
     },

@@ -21,7 +21,7 @@ Being exempt from the window also means staff never see what students see. **Pre
 
 ## Reading the whole notebook
 
-**Whole-notebook submission** adds one question, `notebook`, that is not tied to a cell: the student submits the entire notebook and you read it in the grading queue. Give it points to grade it by hand, or leave it at 0 for a receipt that is stored and rendered but never asks for a score. With it on, the instructor notebook needs no `_marks` cell.
+**Whole-notebook submission** adds one question, `notebook`, that is not tied to a cell: the student submits the entire notebook and you read it in the grading queue. Give it points to grade it by hand, or leave it at 0 for a receipt that is stored and rendered but never asks for a score. To score it part by part, give it a [rubric](grading.md#rubrics); the notebook is then worth what the rubric adds up to. With it on, the instructor notebook needs no `_marks` cell.
 
 Turn **autograde** off when nothing should be run against checks. Submissions are still rendered: the grader re-runs the notebook and stores the HTML you read. Raise `render_timeout` (30–3600 s) when that re-run is a real analysis.
 

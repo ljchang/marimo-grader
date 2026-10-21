@@ -36,6 +36,7 @@ from grader.models import (
     Offering,
     Question,
     Role,
+    Rubric,
     User,
     new_id,
 )
@@ -313,7 +314,21 @@ def patch_assignment(
     if body.title is not None:
         a.title = body.title
     if body.settings is not None:
-        a.settings = _validate_settings({**(a.settings or {}), **body.settings})
+        settings = _validate_settings({**(a.settings or {}), **body.settings})
+        nb = next((q for q in a.questions if q.qid == notebook_submission.NOTEBOOK_QID), None)
+        if (
+            nb is not None
+            and nb.rubric is not None
+            and settings["notebook_submission"]
+            and abs(float(settings["notebook_points"] or 0) - rubric_total(nb.rubric)) > 1e-9
+        ):
+            raise api_error(
+                422,
+                "points_set_by_rubric",
+                f"The notebook is worth what its rubric adds up to "
+                f"({rubric_total(nb.rubric):g}); change the rubric instead",
+            )
+        a.settings = settings
         notebook_submission.sync(db, a)
     audit.record(
         db,
@@ -327,6 +342,102 @@ def patch_assignment(
         reason=body.reason,
     )
     return assignment_json(a)
+
+
+class RubricItemIn(BaseModel):
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+    label: str = Field(min_length=1, max_length=300)
+    points: float = Field(gt=0)
+    group: str | None = Field(default=None, max_length=200)
+
+
+class RubricIn(BaseModel):
+    items: list[RubricItemIn] = Field(max_length=200)
+    reason: str | None = None
+
+
+def rubric_total(r: Rubric) -> float:
+    return sum(float(i.get("points") or 0) for i in r.items or [])
+
+
+def _rubric_json(q: Question) -> dict:
+    r = q.rubric
+    return {
+        "question_id": str(q.id),
+        "items": list(r.items) if r else [],
+        "total": rubric_total(r) if r else 0,
+    }
+
+
+def _staff_question(db: Session, m: Membership, question_id: uuid.UUID) -> Question:
+    q = db.get(Question, question_id)
+    if q is None or q.assignment.offering_id != m.offering.id:
+        raise api_error(404, "not_found", "question not found")
+    return q
+
+
+@router.get("/offerings/{offering_id}/questions/{question_id}/rubric")
+def get_rubric(
+    question_id: uuid.UUID,
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    return _rubric_json(_staff_question(db, m, question_id))
+
+
+@router.put("/offerings/{offering_id}/questions/{question_id}/rubric")
+def put_rubric(
+    question_id: uuid.UUID,
+    body: RubricIn,
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    """Replace a question's rubric; an empty list removes it.
+
+    Items are scored one by one in the grading queue and their scores add up to
+    the manual points. The whole-notebook question takes its points from the
+    rubric; any other question's rubric has to fit in its manual points.
+    """
+    q = _staff_question(db, m, question_id)
+    a = q.assignment
+    keys = [i.key for i in body.items]
+    if len(set(keys)) != len(keys):
+        raise api_error(422, "duplicate_key", "rubric item keys must be unique")
+    items = [i.model_dump(exclude_none=True) for i in body.items]
+    total = sum(i.points for i in body.items)
+    is_notebook = q.qid == notebook_submission.NOTEBOOK_QID
+    manual_max = float(q.max_points) - float(q.auto_points_max)
+    if items and not is_notebook and total > manual_max + 1e-9:
+        raise api_error(
+            422,
+            "rubric_over",
+            f"the rubric adds up to {total:g}, more than the {manual_max:g} manual points",
+        )
+    before = list(q.rubric.items) if q.rubric else []
+    if items:
+        if q.rubric is None:
+            q.rubric = Rubric(offering_id=m.offering.id, name=f"{a.title}: {q.title}", items=items)
+        else:
+            q.rubric.items = items
+        if is_notebook:
+            a.settings = {**(a.settings or {}), "notebook_points": total}
+            notebook_submission.sync(db, a)
+    elif q.rubric is not None:
+        old, q.rubric = q.rubric, None
+        db.delete(old)
+    db.flush()
+    audit.record(
+        db,
+        actor_id=m.user.id,
+        offering_id=m.offering.id,
+        entity="rubric",
+        entity_id=q.id,
+        action="update",
+        before={"items": before},
+        after={"items": items},
+        reason=body.reason,
+    )
+    return _rubric_json(q)
 
 
 class QuestionIn(BaseModel):
