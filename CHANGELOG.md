@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.11] — 2026-10-21
+
 ### Added
 
 - **Rubrics.** A question graded by hand can carry a rubric: **Add a rubric**
