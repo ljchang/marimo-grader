@@ -2,8 +2,8 @@
 
 Three run kinds:
 
-* ``snapshot`` — the student's own outputs: their marimo session snapshot (sent
-  with the attempt, else the autosave closest to it) matched to the submitted cells
+* ``snapshot`` — the student's own outputs: the marimo session snapshot sent
+  with the attempt (or attached by an instructor) matched to the submitted cells
   and exported to HTML without executing anything. Seconds, not minutes, so it
   is queued for every attempt and goes first.
 * ``render`` — ``marimo export html`` of the submitted notebook, stored as an
@@ -36,7 +36,6 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from grader.api.submissions import is_test
-from grader.config import get_settings
 from grader.db import get_engine, get_sessionmaker
 from grader.models import (
     Artifact,
@@ -49,10 +48,8 @@ from grader.models import (
     SubmissionStatus,
     utcnow,
 )
-from grader.services import storage
 from grader.services.artifacts import store
 from grader.services.grades import recompute_question_grade
-from grader.util import iso
 from grader.worker.materialize import rewrite_dependencies
 
 log = logging.getLogger("grader.worker")
@@ -145,64 +142,20 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
     }
 
 
-def _autosave_snapshot(sub: Submission) -> tuple[bytes, dict] | None:
-    """The student's autosaved snapshot closest to the attempt: the newest saved
-    at or before it, else the first one after (flagged), else ``None``."""
-    from grader.api.submissions import AUTOSAVE_DIR, private_prefix
-
-    s = get_settings()
-    if not s.storage_enabled:
-        return None
-    r2 = storage.CloudflareR2(s)
-    base = private_prefix(sub) + AUTOSAVE_DIR + "/"
-    rows = [
-        r
-        for r in r2.list(base)
-        if r["key"] == base + "session.json"
-        or (r["key"].startswith(base + "history/") and r["key"].endswith("/session.json"))
-    ]
-    if not rows:
-        return None
-    submitted = (
-        sub.submitted_at if sub.submitted_at.tzinfo else sub.submitted_at.replace(tzinfo=UTC)
-    )
-    before = [r for r in rows if r["modified"] <= submitted]
-    pick = (
-        max(before, key=lambda r: r["modified"])
-        if before
-        else min(rows, key=lambda r: r["modified"])
-    )
-    got = r2.get(pick["key"])
-    if got is None:
-        return None
-    data, modified = got
-    return data, {
-        "snapshot": "autosave",
-        "saved_at": iso(modified),
-        "after_submission": modified > submitted,
-    }
-
-
 def _snapshot_for(db: Session, sub: Submission) -> tuple[bytes, dict] | None:
     if sub.snapshot_artifact_id is not None:
         art = db.get(Artifact, sub.snapshot_artifact_id)
         assert art is not None
         source = "attached" if art.kind == "snapshot-attached" else "submitted"
         return store().get(art), {"snapshot": source, "snapshot_artifact_id": str(art.id)}
-    got = _autosave_snapshot(sub)
-    if got is None:
-        return None
-    data, info = got
-    # Keep the copy rendered from: the autosave is overwritten as the student works on.
-    art = store().put(db, data, kind="snapshot-autosave", content_type="application/json")
-    return data, {**info, "snapshot_artifact_id": str(art.id)}
+    return None
 
 
 def do_snapshot(db: Session, run: GraderRun, sub: Submission) -> None:
     """Render the student's own outputs from their session snapshot; executes nothing."""
     got = _snapshot_for(db, sub)
     if got is None:
-        run.results = {"snapshot": None, "skipped": "no snapshot sent and no autosave found"}
+        run.results = {"snapshot": None, "skipped": "no snapshot was sent with this attempt"}
         return
     data, info = got
     with tempfile.TemporaryDirectory() as td:

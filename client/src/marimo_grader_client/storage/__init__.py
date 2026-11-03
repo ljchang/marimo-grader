@@ -87,8 +87,6 @@ def signin_button(server: str | None = None, offering: str | None = None):
     The same widget assignments use: the handshake runs in the browser and
     the token lands in the kernel when approved. Nothing blocks, so a reader
     who cannot sign in simply leaves it alone. Pair with :func:`connect`.
-    In a published assignment, signing in also starts autosave
-    (:mod:`marimo_grader_client.autosave`).
     """
     import marimo as mo
 
@@ -96,21 +94,12 @@ def signin_button(server: str | None = None, offering: str | None = None):
         return mo.md("*Sign in with Dartmouth* — not available on the static page")
     from marimo_grader_client.widget import GraderWidget
 
-    srv = _notebook.resolve_server(server)
-    off = _notebook.resolve_offering(offering)
-
-    def start_autosave(token: str, _netid: str) -> None:
-        from marimo_grader_client import autosave
-
-        autosave.start(Token(token, srv), offering=off)
-
     return mo.ui.anywidget(
         GraderWidget(
             mode="signin",
-            server=srv,
-            offering_id=off or "",
+            server=_notebook.resolve_server(server),
+            offering_id=_notebook.resolve_offering(offering) or "",
             payload={"client": "marimo-grader-client"},
-            on_token=start_autosave,
         )
     )
 
@@ -163,11 +152,6 @@ def connect(button=None, *, offering: str | None = None, quiet: bool = False) ->
             )
         _state.reset()
         return False
-    # Signed in: back the notebook and its outputs up from here on (a no-op if
-    # already running, or for a notebook that is not a published assignment).
-    from marimo_grader_client import autosave
-
-    autosave.start(token, offering=offering)
     return True
 
 

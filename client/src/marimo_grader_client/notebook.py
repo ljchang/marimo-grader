@@ -18,15 +18,7 @@ from pathlib import Path
 from typing import Any
 
 # Keys the grader client understands, in normalized (snake_case) form.
-GRADER_KEYS = (
-    "assignment_version_id",
-    "offering_id",
-    "assignment_id",
-    "assignment_slug",
-    "server",
-    "course",
-    "term",
-)
+GRADER_KEYS = ("assignment_version_id", "offering_id", "assignment_id", "server", "course", "term")
 
 # MoGrader injects these into the ``# /// script`` block of student notebooks.
 MOGRADER_KEYS = (
@@ -51,11 +43,7 @@ _KEY_ALIASES = {
     "version_id": "assignment_version_id",
     "offering": "offering_id",
     "offering_id": "offering_id",
-    # Publishing writes both: ``grader-assignment = "glm"`` (the slug, which names
-    # the student's private/<slug>/ folder) and ``grader-assignment-id`` (a uuid).
-    "assignment": "assignment_slug",
-    "assignment_slug": "assignment_slug",
-    "slug": "assignment_slug",
+    "assignment": "assignment_id",
     "assignment_id": "assignment_id",
     "server": "server",
     "url": "server",
@@ -169,7 +157,7 @@ def read_notebook_source(path: str | os.PathLike[str] | None = None) -> str | No
 # --------------------------------------------------------------------------
 
 # Matches the server's limit (GRADER_MAX_SNAPSHOT_BYTES); a bigger snapshot is
-# left out of the submission and the grader falls back to the autosaved one.
+# left out of the submission, which then shows its code without outputs.
 MAX_SNAPSHOT_BYTES = 10 * 1024 * 1024
 
 
@@ -334,8 +322,7 @@ def read_assignment_metadata(source: str | None) -> dict[str, Any]:
         # ///
 
     The result uses snake_case keys: ``assignment_version_id``,
-    ``offering_id``, ``assignment_id``, ``assignment_slug`` (from
-    ``grader-assignment``), ``server`` plus any ``mograder_*``
+    ``offering_id``, ``assignment_id``, ``server`` plus any ``mograder_*``
     keys found (``mograder_cell_hashes`` is split into a list).
     """
     out: dict[str, Any] = {}

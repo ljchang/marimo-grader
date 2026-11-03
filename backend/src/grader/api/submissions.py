@@ -271,7 +271,7 @@ def create_submission(
         if snap is not None:
             snap_art = st.put(db, snap, kind="snapshot", content_type="application/json")
         # A bad snapshot never costs the student the attempt: the notebook is
-        # what is graded; the render falls back to their autosave.
+        # what is graded, and the grading view still shows its code.
         client_meta["snapshot"] = why
 
     sub = Submission(
@@ -296,8 +296,8 @@ def create_submission(
         db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
     if notebook_submission.is_receipt(question):
         sub.status = SubmissionStatus.graded
-    # The student's own outputs, rendered from their session snapshot (or their
-    # latest autosave) without running anything: the render when the assignment
+    # The student's own outputs, rendered from their session snapshot without
+    # running anything (a no-op when none came with it): the render when the assignment
     # does not re-run, and the first one to arrive when it does.
     db.add(GraderRun(submission_id=sub.id, kind=RunKind.snapshot))
     if settings.get("render", True):
@@ -400,19 +400,6 @@ def get_notebook(
     return Response(content=store().get(art), media_type="text/x-python")
 
 
-# The client backs the notebook and its outputs up here once the student signs in
-# (marimo_grader_client.autosave): <private>/<assignment slug>/.autosave/...
-AUTOSAVE_DIR = ".autosave"
-
-
-def private_prefix(sub: Submission) -> str:
-    """The bucket prefix of the student's ``storage.private()/<assignment slug>/``."""
-    a = sub.question.assignment
-    off = a.offering
-    uid = storage.uid_for(get_settings(), off.id, sub.enrollment.user.netid)
-    return f"users/{off.course.slug}-{off.term}/{uid}/{a.slug}/"
-
-
 @router.get("/submissions/{submission_id}/files")
 def get_files(
     submission_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)
@@ -429,7 +416,9 @@ def get_files(
     if not s.storage_enabled:
         return {"enabled": False, "prefix": None, "files": []}
     a = sub.question.assignment
-    prefix = private_prefix(sub)
+    off = a.offering
+    uid = storage.uid_for(s, off.id, sub.enrollment.user.netid)
+    prefix = f"users/{off.course.slug}-{off.term}/{uid}/{a.slug}/"
     due = availability.Window.of(a).due_at
     submitted = (
         sub.submitted_at if sub.submitted_at.tzinfo else sub.submitted_at.replace(tzinfo=UTC)
@@ -441,8 +430,6 @@ def get_files(
         raise api_error(e.status, e.code, str(e)) from e
     files = []
     for r in sorted(rows, key=lambda r: r["key"]):
-        if r["key"][len(prefix) :].startswith(AUTOSAVE_DIR + "/"):
-            continue  # the client's own backups, not a hand-in (see autosave_key)
         modified = r["modified"]
         files.append(
             {

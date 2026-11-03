@@ -25,7 +25,6 @@ const SUBMISSION_POLL_LIMIT_MS = 120000;
 // The kernel waits up to ~3 s for marimo to write the session snapshot, then
 // sends it; a big snapshot takes a moment more to arrive.
 const PAYLOAD_REFRESH_TIMEOUT_MS = 12000;
-const AUTOSAVE_POLL_MS = 20000;
 const TOKEN_ACK_TIMEOUT_MS = 3000;
 
 // ---- small DOM helpers -----------------------------------------------------
@@ -416,45 +415,10 @@ function scoreBlock(sub) {
 
 // ---- modes ------------------------------------------------------------------
 
-// "Autosave on · last saved 14:32": asked of the kernel by message, so the status
-// never becomes part of the button's value (see memTokens on why that matters).
-function autosaveText(st) {
-  if (!st || !st.on) return "";
-  let text = "Autosave on";
-  if (st.saved_at) {
-    const t = new Date(Number(st.saved_at) * 1000);
-    text += ` \u00b7 last saved ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-  }
-  if (st.error) text += " \u00b7 last try failed, retrying";
-  return text;
-}
-
-function watchAutosave(state, line) {
-  const { model } = state;
-  const handler = (msg) => {
-    if (msg && msg.type === "autosave") line.textContent = autosaveText(msg);
-  };
-  const ask = () => {
-    try { model.send({ type: "autosave?" }); } catch { /* no kernel: static page */ }
-  };
-  try { model.on("msg:custom", handler); } catch { return; }
-  ask();
-  const timer = setInterval(() => {
-    if (!state.alive) {
-      clearInterval(timer);
-      try { model.off("msg:custom", handler); } catch { /* ignore */ }
-      return;
-    }
-    ask();
-  }, AUTOSAVE_POLL_MS);
-}
-
 function renderSignin(state) {
   const { el } = state;
   const box = h("div", { class: "grader-panel" });
-  const autosave = h("div", { class: "grader-note grader-muted grader-autosave" });
-  el.append(box, autosave);
-  watchAutosave(state, autosave);
+  el.append(box);
   const cred = currentToken(state);
   if (cred) {
     box.append(signedInLine(state, box, null, cred.netid));
@@ -722,8 +686,6 @@ _CSS = r"""
 .grader-score { font-size: 1.15rem; font-weight: 600; }
 .grader-feedback { white-space: pre-wrap; }
 .grader-note { margin: 0; }
-.grader-autosave { font-size: 0.85em; }
-.grader-autosave:empty { display: none; }
 .grader-muted { color: var(--gc-muted); }
 .grader-ok { color: var(--gc-ok); }
 .grader-err { color: var(--gc-err); }
@@ -765,17 +727,13 @@ class GraderWidget(anywidget.AnyWidget):
         *,
         payload_factory: Callable[[], dict[str, Any]] | None = None,
         extra_factory: Callable[[], dict[str, Any]] | None = None,
-        on_token: Callable[[str, str], Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """``extra_factory``: merged into the submission body at click time but
-        sent by message, never stored in a trait (the session snapshot).
-        ``on_token``: called with ``(token, netid)`` once the browser hands the
-        token over (starts autosave)."""
+        sent by message, never stored in a trait (the session snapshot)."""
         super().__init__(**kwargs)
         self._payload_factory = payload_factory
         self._extra_factory = extra_factory
-        self._on_token = on_token
         self.token = ""
         self.netid = ""
         self.on_msg(self._on_custom_msg)
@@ -790,16 +748,6 @@ class GraderWidget(anywidget.AnyWidget):
             # The browser sets status="approved" on this ack: marimo reruns
             # cells only for browser-side changes, and by then the token is here.
             self.send({"type": "token-ok"})
-            if self._on_token is not None and self.token:
-                try:
-                    self._on_token(self.token, self.netid)
-                except Exception:  # noqa: BLE001 - a side effect must not break sign-in
-                    pass
-            return
-        if content.get("type") == "autosave?":
-            from marimo_grader_client import autosave
-
-            self.send({"type": "autosave", **autosave.status()})
             return
         if content.get("type") != "refresh":
             return

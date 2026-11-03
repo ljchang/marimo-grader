@@ -305,12 +305,10 @@ export interface Submission {
  */
 export interface RenderInfo {
   source: 'snapshot' | 'rerun' | 'attached';
-  /** Which snapshot: sent with the attempt, the student's autosave, or attached later. */
-  snapshot?: 'submitted' | 'autosave' | 'attached' | 'attached-html';
+  /** Which snapshot: sent with the attempt, or attached by an instructor later. */
+  snapshot?: 'submitted' | 'attached' | 'attached-html';
   matched?: number;
   total?: number;
-  /** When the autosave rendered from was written. */
-  saved_at?: string;
 }
 
 /** What the student saved under storage.private()/<slug>/ (GET /submissions/{id}/files). */

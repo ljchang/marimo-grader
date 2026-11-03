@@ -1,6 +1,5 @@
 """Grading from the student's own outputs: the session snapshot sent with an
-attempt, rendered without running anything; the autosave it falls back to; the
-instructor backfill; and the autosave folder kept out of Saved files.
+attempt, rendered without running anything, and the instructor backfill.
 
 The fixture is a small synthetic notebook and the session ``marimo export
 session`` wrote for it (marimo 0.25.2, the version the worker pins).
@@ -27,7 +26,6 @@ from grader.models import (
 from grader.services.artifacts import store
 from tests.conftest import login, notebook_token
 from tests.test_private_assignments import _patch
-from tests.test_storage import fake_cf, storage_on  # noqa: F401
 
 FIXTURE = Path(__file__).parent / "fixtures" / "snapshot"
 NOTEBOOK = (FIXTURE / "notebook.py").read_text()
@@ -198,52 +196,6 @@ def test_nothing_to_render_is_not_a_failure(client, seed):
     assert _sub(sub_id).render_artifact_id is None
 
 
-# -- no snapshot: fall back to the student's autosave ------------------------------
-
-
-def test_falls_back_to_the_autosave_closest_to_the_attempt(
-    client,
-    seed,
-    storage_on,  # noqa: F811
-    fake_cf,  # noqa: F811
-    monkeypatch,
-):
-    pytest.importorskip("marimo")
-    from grader.services import storage
-
-    sub_id = _submit(client, seed, snapshot=None)
-    submitted = _sub(sub_id).submitted_at.replace(tzinfo=UTC)
-    early, late = submitted - timedelta(minutes=10), submitted + timedelta(minutes=5)
-    listed, fetched = [], []
-
-    def fake_list(self, prefix):
-        listed.append(prefix)
-        return [
-            # the live copy was saved after the attempt; history has one from before
-            {"key": prefix + "session.json", "size": 1, "modified": late},
-            {"key": prefix + "notebook.py", "size": 1, "modified": late},
-            {"key": prefix + "history/20261103T100000Z/session.json", "size": 1, "modified": early},
-            {"key": prefix + "history/20261103T100000Z/notebook.py", "size": 1, "modified": early},
-        ]
-
-    def fake_get(self, key):
-        fetched.append(key)
-        return SESSION.encode(), early
-
-    monkeypatch.setattr(storage.CloudflareR2, "list", fake_list)
-    monkeypatch.setattr(storage.CloudflareR2, "get", fake_get)
-    [run] = _work()
-    assert run.status == RunStatus.succeeded, run.error
-    uid = storage.uid_for(config.get_settings(), seed.offering_id, "f00abc1")
-    assert listed == [f"users/neuroimaging-2026-fall/{uid}/glm/.autosave/"]
-    assert fetched == [listed[0] + "history/20261103T100000Z/session.json"]
-    assert run.results["snapshot"] == "autosave" and run.results["after_submission"] is False
-    # the copy rendered from is kept: the autosave moves on as the student works
-    assert _artifact(uuid.UUID(run.results["snapshot_artifact_id"]))[0] == "snapshot-autosave"
-    j = _as_prof(client, sub_id)
-    assert j["render_info"]["snapshot"] == "autosave" and j["render_info"]["saved_at"]
-
-
 def test_failed_snapshot_render_does_not_explain_a_failed_grade(client, seed):
     from grader.api.grading import _last_error
 
@@ -324,31 +276,6 @@ def test_attach_is_for_instructors_with_one_thing(client, seed, netid, body, sta
     assert _attach(client, sub_id, netid, **body).status_code == status
 
 
-# -- Saved files leaves the autosave out --------------------------------------------
-
-
-def test_saved_files_hide_the_autosave(client, seed, storage_on, fake_cf, monkeypatch):  # noqa: F811
-    from grader.services import storage
-
-    sub_id = _submit(client, seed, snapshot=None)
-    now = datetime.now(UTC)
-
-    def fake_list(self, prefix):
-        return [
-            {"key": prefix + k, "size": 1, "modified": now}
-            for k in (
-                "figures/result.png",
-                ".autosave/notebook.py",
-                ".autosave/history/20261103T100000Z/session.json",
-            )
-        ]
-
-    monkeypatch.setattr(storage.CloudflareR2, "list", fake_list)
-    login(client, "prof")
-    files = client.get(f"/api/v1/submissions/{sub_id}/files").json()["files"]
-    assert [f["path"] for f in files] == ["figures/result.png"]
-
-
 def test_attach_outputs_cli_finds_the_latest_attempt(client, seed, monkeypatch, tmp_path, capsys):
     from contextlib import nullcontext
 
@@ -390,3 +317,17 @@ def test_attach_outputs_cli_needs_the_assignment_with_a_netid():
 
     with pytest.raises(SystemExit):
         cli.main(["attach-outputs", "--server", "x", "--netid", "f00abc1", "--html", "a.html"])
+
+
+def test_cells_with_identical_code_keep_their_own_outputs():
+    """marimo matches outputs by code hash alone; two cells with the same code must
+    not collapse onto one, and an empty cell is not a lost output."""
+    pytest.importorskip("marimo")
+    import json
+
+    from grader.worker.snapshot_render import render
+
+    session = json.loads((FIXTURE / "duplicates.session.json").read_text())
+    html, matched, total = render(FIXTURE / "duplicates.py", session)
+    assert (matched, total) == (3, 3)  # the empty fourth cell is not counted
+    assert "run 1" in html and "run 2" in html

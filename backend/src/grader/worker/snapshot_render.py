@@ -41,7 +41,9 @@ def render(notebook: Path, session: dict) -> tuple[str, int, int]:
 
     file_manager = load_notebook(str(notebook.resolve()))
     cells = list(file_manager.app.cell_manager.cell_data())
-    by_hash = {_hash_code(c.code): c.cell_id for c in cells}
+    by_hash, session = _pair_by_occurrence(
+        [(_hash_code(c.code), c.cell_id) for c in cells], session
+    )
     view = deserialize_session(session, by_hash)
     for c in cells:  # code for every cell; outputs only where the hash matched
         view.last_executed_code[c.cell_id] = c.code
@@ -64,8 +66,35 @@ def render(notebook: Path, session: dict) -> tuple[str, int, int]:
             sharing_config=None,
         )
     )
-    matched = sum(1 for c in cells if c.cell_id in view.cell_notifications)
-    return html, matched, len(cells)
+    # Empty cells have nothing to show; counting them would read as lost outputs.
+    with_code = [c for c in cells if c.code.strip()]
+    matched = sum(1 for c in with_code if c.cell_id in view.cell_notifications)
+    return html, matched, len(with_code)
+
+
+def _pair_by_occurrence(cells: list[tuple[str, str]], session: dict) -> tuple[dict[str, str], dict]:
+    """A code-hash map that keeps cells with identical code apart.
+
+    marimo matches outputs to cells by code hash alone, so two cells with the same
+    code (``df.head()`` twice, or blank cells) collapse onto one: the first loses
+    its output and the last shows whichever ran last. Suffixing each hash with its
+    occurrence number, in document order on both sides, pairs the n-th such cell
+    with the n-th such output instead.
+    """
+    seen: dict[str, int] = {}
+    by_key: dict[str, str] = {}
+    for h, cell_id in cells:
+        by_key[f"{h}#{seen.get(h, 0)}"] = cell_id
+        seen[h] = seen.get(h, 0) + 1
+    seen = {}
+    out_cells = []
+    for cell in session.get("cells", []):
+        h = cell.get("code_hash")
+        if h is not None:
+            cell = {**cell, "code_hash": f"{h}#{seen.get(h, 0)}"}
+            seen[h] = seen.get(h, 0) + 1
+        out_cells.append(cell)
+    return by_key, {**session, "cells": out_cells}
 
 
 def main(argv: list[str] | None = None) -> None:

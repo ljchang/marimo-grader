@@ -39,8 +39,7 @@ The rendered notebook fills the left pane; the right pane holds the score, the f
 
 The left pane is the student's notebook rendered with each cell's code above its output, so you read the answer and not only whether a check passed. The label above it says where those outputs came from:
 
-- **The student's own outputs, saved with this attempt** — what the student's notebook showed when they clicked Submit, sent with the attempt and rendered without running anything. It appears within seconds, for every assignment. A cell the student edited after it last ran shows its code only; the label counts how many cells kept their outputs (*4 of 5 cells*).
-- **The student's own outputs, autosaved …** — the attempt arrived without its outputs (an older client, a snapshot too large to send), so the grader used the student's [autosave](../students/sign-in-and-submit.md#autosave) closest to the submission time.
+- **The student's own outputs, saved with this attempt** — what the student's notebook showed when they clicked Submit, sent with the attempt and rendered without running anything. It appears within seconds, for every assignment. A cell the student edited after it last ran shows its code only; the label counts how many cells with code kept their outputs (*4 of 5 cells*). An attempt that arrived without them (from a client before 0.3.0, or a snapshot over 10 MiB) shows its code only, until you attach outputs.
 - **Re-run by the grader** — for assignments that re-run submissions, the grader's own execution replaces the student's outputs once it finishes.
 - **Outputs attached by the instructor** / **Render attached by the instructor** — added afterwards with [`grader attach-outputs`](../reference/cli.md#grader-attach-outputs).
 

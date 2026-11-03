@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     max_outputs_bytes: int = 8 * 1024 * 1024
     # marimo's session snapshot sent with an attempt (the student's own outputs,
     # images inlined). Kept under Caddy's 16 MB body limit with the notebook; a
-    # bigger one is dropped, not refused, and the render falls back to autosave.
+    # bigger one is dropped, not refused (the attempt then renders as code only).
     max_snapshot_bytes: int = 10 * 1024 * 1024
 
     # Storage broker (docs/storage-architecture.md). Off until every value is

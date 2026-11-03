@@ -34,7 +34,7 @@ The widget's JavaScript, running in the student's browser, assembles a payload:
 - **the session snapshot**: marimo's record of every cell's last outputs (`__marimo__/session/<notebook>.py.json`), each tagged with a hash of the code that produced it. marimo writes it a second or two after outputs change, so the kernel waits up to about 2.5 s for a fresh write. It travels by message, never in the widget's synced state, so it cannot end up inside the next snapshot;
 - **a client id** for the submission, so a double-click cannot create two attempts.
 
-It posts this to the grader with the student's notebook token as a bearer credential. The Python kernel never makes a network call for the submission; it only reads the files and builds the payload. (Separately, from sign-in on, a background thread [autosaves](../students/sign-in-and-submit.md#autosave) the notebook and its snapshot to the student's storage.) That separation is what lets the same notebook submit from MoLab, a cluster, a laptop or a browser tab — see [Notebook sign-in](../auth/notebook-sign-in.md).
+It posts this to the grader with the student's notebook token as a bearer credential. The Python kernel never makes a network call; it only reads the files and builds the payload. That separation is what lets the same notebook submit from MoLab, a cluster, a laptop or a browser tab — see [Notebook sign-in](../auth/notebook-sign-in.md).
 
 ## 2. At the API
 
@@ -55,7 +55,7 @@ The submission is now immutable. It is bound to the assignment *version* the stu
 
 Workers claim queued runs with `SELECT … FOR UPDATE SKIP LOCKED`, so several can run side by side without treading on each other.
 
-**The snapshot render goes first.** It matches the snapshot's outputs to the submitted cells by code hash and hands them to marimo's HTML exporter: the page `marimo export html` would make, without executing anything, in about a second. A cell edited after it last ran keeps its code and loses its stale output. With no snapshot on the attempt, it uses the student's autosave closest to the submission time. The result is the render graders see until a re-run replaces it, and the only one when re-run is off. It parses the notebook statically and runs in a subprocess, and it uses marimo internals, so the worker pins marimo's version.
+**The snapshot render goes first.** It matches the snapshot's outputs to the submitted cells by code hash (in document order where two cells have the same code) and hands them to marimo's HTML exporter: the page `marimo export html` would make, without executing anything, in about a second. A cell edited after it last ran keeps its code and loses its stale output. With no snapshot on the attempt it renders nothing, and the grading view shows the code. The result is the render graders see until a re-run replaces it, and the only one when re-run is off. It parses the notebook statically and runs in a subprocess, and it uses marimo internals, so the worker pins marimo's version.
 
 **Render goes before autograde when both are queued.** Rendering runs outside the sandbox and therefore has network; autograding does not. For an assignment that downloads data, grading first on a cold cache fails the whole run while the render quietly warms it — so the failure disappears on the next attempt and cannot be reproduced. Ordering the two removes that ghost. (Warming the cache at deploy time is the real fix; see [Sandbox and data](../operators/sandbox-and-data.md).)
 

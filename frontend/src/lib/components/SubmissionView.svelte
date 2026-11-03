@@ -38,10 +38,6 @@
     const whose = own ? 'Your own outputs' : "The student's own outputs";
     if (i.source === 'snapshot') {
       if (i.snapshot === 'attached') return ['Outputs attached by the instructor', cells(i)];
-      if (i.snapshot === 'autosave') {
-        const when = i.saved_at ? `autosaved ${fmtDateTime(i.saved_at)}` : 'autosaved';
-        return [`${whose}, ${when}`, cells(i)];
-      }
       return [`${whose}, saved with this attempt`, cells(i)];
     }
     if (i.source === 'attached') return ['Render attached by the instructor', ''];

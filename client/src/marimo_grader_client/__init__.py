@@ -274,16 +274,6 @@ class Grader:
 
     # -- widgets -----------------------------------------------------------
 
-    def _start_autosave(self, token: str, _netid: str = "") -> None:
-        from marimo_grader_client import autosave
-        from marimo_grader_client.storage import Token
-
-        autosave.start(
-            Token(token, self.server),
-            offering=self.offering_id or None,
-            notebook=self._notebook_path,
-        )
-
     def _widget(self, mode: str, **traits: Any) -> Any:
         if os.environ.get("GRADER_RENDER"):
             # The grader worker renders submissions to static HTML for the grading
@@ -304,14 +294,8 @@ class Grader:
         )
 
     def signin_button(self) -> Any:
-        """A "Sign in with Dartmouth" button (device handshake; token stays in the browser).
-
-        Signing in also starts autosave (see :mod:`marimo_grader_client.autosave`):
-        the notebook and its outputs are backed up to the student's storage.
-        """
-        return self._widget(
-            "signin", payload={"client": client_info(__version__)}, on_token=self._start_autosave
-        )
+        """A "Sign in with Dartmouth" button (device handshake; token stays in the browser)."""
+        return self._widget("signin", payload={"client": client_info(__version__)})
 
     def submit_button(self, question_id: str, outputs: dict[str, Any] | None = None) -> Any:
         """A "Submit <question_id>" button. When clicked, the notebook is re-read

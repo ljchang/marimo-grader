@@ -26,7 +26,6 @@ When an assignment is published, the server finalizes the student notebook by ad
 | `mograder-cell-hashes` | MoGrader during publish | detecting edited check cells; the grader restores them before running |
 | `grader-server` | the grader | where the widget signs in and submits |
 | `grader-course`, `grader-term`, `grader-assignment` | the grader | human-readable identity and the public alias URLs |
-| `grader-assignment` | the grader | also names the student's `private/<slug>/` folder, where [autosave](../students/sign-in-and-submit.md#autosave) keeps `.autosave/`; a notebook without it is not autosaved |
 | `grader-offering-id`, `grader-assignment-id` | the grader | the widget's feedback view |
 | `grader-assignment-version` | the grader | which version a submission is bound to; authoritative |
 | `grader-version` | the grader | the version number, for people |
