@@ -26,6 +26,8 @@ from marimo_grader_client.notebook import (
     env_metadata,
     read_assignment_metadata,
     read_notebook_source,
+    read_session_snapshot,
+    session_snapshot_path,
 )
 from marimo_grader_client.widget import GraderWidget
 
@@ -255,6 +257,21 @@ class Grader:
             self.read_source(), self.check_results(), outputs, client_info(__version__)
         )
 
+    def snapshot_extra(self, **kw: Any) -> dict[str, Any]:
+        """The student's own outputs for a submission: marimo's session snapshot
+        (``__marimo__/session/<notebook>.py.json``), read when Submit is clicked.
+
+        Goes into the request body by message, not into the widget's payload
+        trait. ``client.snapshot`` records what happened, so a submission without
+        one says why.
+        """
+        path = session_snapshot_path(self._notebook_path) if self._notebook_path else None
+        text, note = read_session_snapshot(path, **kw)
+        extra: dict[str, Any] = {"client": {**client_info(__version__), "snapshot": note}}
+        if text is not None:
+            extra["snapshot"] = text
+        return extra
+
     # -- widgets -----------------------------------------------------------
 
     def _widget(self, mode: str, **traits: Any) -> Any:
@@ -281,13 +298,15 @@ class Grader:
         return self._widget("signin", payload={"client": client_info(__version__)})
 
     def submit_button(self, question_id: str, outputs: dict[str, Any] | None = None) -> Any:
-        """A "Submit <question_id>" button. The payload is rebuilt when clicked."""
+        """A "Submit <question_id>" button. When clicked, the notebook is re-read
+        and marimo's session snapshot (the student's own outputs) goes with it."""
         outputs = dict(outputs or {})
         return self._widget(
             "submit",
             question_id=question_id,
             payload=self.build_payload(outputs),
             payload_factory=lambda: self.build_payload(outputs),
+            extra_factory=self.snapshot_extra,
         )
 
     def feedback(self, question_id: str) -> Any:

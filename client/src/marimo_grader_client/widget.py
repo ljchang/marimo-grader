@@ -22,7 +22,9 @@ _ESM = r"""
 
 const SUBMISSION_POLL_MS = 3000;
 const SUBMISSION_POLL_LIMIT_MS = 120000;
-const PAYLOAD_REFRESH_TIMEOUT_MS = 3000;
+// The kernel waits up to ~3 s for marimo to write the session snapshot, then
+// sends it; a big snapshot takes a moment more to arrive.
+const PAYLOAD_REFRESH_TIMEOUT_MS = 12000;
 const TOKEN_ACK_TIMEOUT_MS = 3000;
 
 // ---- small DOM helpers -----------------------------------------------------
@@ -357,18 +359,25 @@ function signedInLine(state, container, onSignedIn, netid) {
 
 // ---- payload refresh (asks the kernel to re-read the notebook) ------------
 
+// Resolves with what the kernel sends alongside the payload but outside any
+// synced trait (the session snapshot: large, and it must not end up in the
+// widget's own saved state).
 function refreshPayload(state) {
   const { model } = state;
   return new Promise((resolve) => {
     let done = false;
+    let extra = {};
     const finish = () => {
       if (done) return;
       done = true;
       try { model.off("msg:custom", handler); } catch { /* ignore */ }
-      resolve();
+      resolve(extra);
     };
     const handler = (msg) => {
-      if (msg && msg.type === "payload") finish();
+      if (msg && msg.type === "payload") {
+        extra = (msg.extra && typeof msg.extra === "object") ? msg.extra : {};
+        finish();
+      }
     };
     try {
       model.on("msg:custom", handler);
@@ -449,8 +458,8 @@ async function submit(state, btn, out) {
   }
   out.append(note("muted", "Collecting your notebook..."));
   setStatus(model, "submitting", "");
-  await refreshPayload(state);
-  const payload = model.get("payload") || {};
+  const extra = await refreshPayload(state);
+  const payload = { ...(model.get("payload") || {}), ...extra };
   if (!payload.notebook) {
     btn.disabled = false;
     clear(out);
@@ -714,10 +723,17 @@ class GraderWidget(anywidget.AnyWidget):
     message = traitlets.Unicode("").tag(sync=True)
 
     def __init__(
-        self, *, payload_factory: Callable[[], dict[str, Any]] | None = None, **kwargs: Any
+        self,
+        *,
+        payload_factory: Callable[[], dict[str, Any]] | None = None,
+        extra_factory: Callable[[], dict[str, Any]] | None = None,
+        **kwargs: Any,
     ) -> None:
+        """``extra_factory``: merged into the submission body at click time but
+        sent by message, never stored in a trait (the session snapshot)."""
         super().__init__(**kwargs)
         self._payload_factory = payload_factory
+        self._extra_factory = extra_factory
         self.token = ""
         self.netid = ""
         self.on_msg(self._on_custom_msg)
@@ -740,7 +756,13 @@ class GraderWidget(anywidget.AnyWidget):
                 self.payload = self._payload_factory()
             except Exception as e:  # noqa: BLE001 - surface, never crash the kernel
                 self.message = f"payload refresh failed: {e}"
-        self.send({"type": "payload"})
+        extra: dict[str, Any] = {}
+        if self._extra_factory is not None:
+            try:
+                extra = self._extra_factory()
+            except Exception:  # noqa: BLE001 - submit without it rather than not at all
+                extra = {}
+        self.send({"type": "payload", "extra": extra})
 
     def refresh_payload(self) -> dict[str, Any]:
         """Rebuild ``payload`` from the factory (also used by the JS refresh)."""

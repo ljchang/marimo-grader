@@ -1,7 +1,11 @@
 """grader-worker: claims queued grader runs and executes them.
 
-Two run kinds:
+Three run kinds:
 
+* ``snapshot`` — the student's own outputs: the marimo session snapshot sent
+  with the attempt (or attached by an instructor) matched to the submitted cells
+  and exported to HTML without executing anything. Seconds, not minutes, so it
+  is queued for every attempt and goes first.
 * ``render`` — ``marimo export html`` of the submitted notebook, stored as an
   artifact for the grading view and the student portal.
 * ``autograde`` — materialize the submission in the on-disk layout MoGrader
@@ -18,6 +22,7 @@ with a clear error.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -50,6 +55,7 @@ from grader.worker.materialize import rewrite_dependencies
 log = logging.getLogger("grader.worker")
 
 RENDER_TIMEOUT = int(os.environ.get("GRADER_RENDER_TIMEOUT", "180"))
+SNAPSHOT_TIMEOUT = int(os.environ.get("GRADER_SNAPSHOT_TIMEOUT", "120"))
 
 
 # Render before autograde when both are queued at the same instant. Rendering runs
@@ -64,7 +70,11 @@ RENDER_TIMEOUT = int(os.environ.get("GRADER_RENDER_TIMEOUT", "180"))
 # of the time, so which ran first was left to whatever the database returned. Warming
 # the cache at deploy time is the real fix (see deploy/warm_cache.py); this makes the
 # cold case recover on the first submission rather than the second.
-_RUN_PRIORITY = case({RunKind.render.value: 0}, value=GraderRun.kind, else_=1)
+#
+# The snapshot render executes nothing and takes seconds, so it goes before both.
+_RUN_PRIORITY = case(
+    {RunKind.snapshot.value: 0, RunKind.render.value: 1}, value=GraderRun.kind, else_=2
+)
 
 
 def claim(db: Session) -> GraderRun | None:
@@ -124,7 +134,62 @@ def do_render(db: Session, run: GraderRun, sub: Submission) -> None:
         html = out.read_bytes()
     art = store().put(db, html, kind="render", content_type="text/html")
     sub.render_artifact_id = art.id
-    run.results = {"bytes": len(html), "env": str(venv) if venv else "worker", "code": True}
+    run.results = {
+        "bytes": len(html),
+        "env": str(venv) if venv else "worker",
+        "code": True,
+        "render_artifact_id": str(art.id),
+    }
+
+
+def _snapshot_for(db: Session, sub: Submission) -> tuple[bytes, dict] | None:
+    if sub.snapshot_artifact_id is not None:
+        art = db.get(Artifact, sub.snapshot_artifact_id)
+        assert art is not None
+        source = "attached" if art.kind == "snapshot-attached" else "submitted"
+        return store().get(art), {"snapshot": source, "snapshot_artifact_id": str(art.id)}
+    return None
+
+
+def do_snapshot(db: Session, run: GraderRun, sub: Submission) -> None:
+    """Render the student's own outputs from their session snapshot; executes nothing."""
+    got = _snapshot_for(db, sub)
+    if got is None:
+        run.results = {"snapshot": None, "skipped": "no snapshot was sent with this attempt"}
+        return
+    data, info = got
+    with tempfile.TemporaryDirectory() as td:
+        nb, session, out = (
+            Path(td) / "notebook.py",
+            Path(td) / "session.json",
+            Path(td) / "out.html",
+        )
+        nb.write_bytes(_notebook_bytes(db, sub))
+        session.write_bytes(data)
+        cmd = [sys.executable, "-m", "grader.worker.snapshot_render", str(nb), str(session)]
+        env = {**os.environ, "MARIMO_SKIP_UPDATE_CHECK": "1"}
+        from grader.worker.sandbox import run_with_timeout
+
+        proc = run_with_timeout([*cmd, "-o", str(out)], timeout=SNAPSHOT_TIMEOUT, env=env, cwd=td)
+        if proc.returncode != 0 or not out.exists():
+            raise RuntimeError(f"snapshot render failed: {proc.stderr[-2000:]}")
+        counts = json.loads(proc.stdout.strip().splitlines()[-1])
+        html = out.read_bytes()
+    art = store().put(db, html, kind="render-snapshot", content_type="text/html")
+    current = db.get(Artifact, sub.render_artifact_id) if sub.render_artifact_id else None
+    # First render to arrive, or replacing an earlier one of its own kind. A finished
+    # re-run stays put, unless an instructor attached this snapshot on purpose.
+    shown = current is None or current.kind == "render-snapshot" or info["snapshot"] == "attached"
+    if shown:
+        sub.render_artifact_id = art.id
+    run.results = {
+        **(run.results or {}),  # e.g. an instructor's note on an attached snapshot
+        **info,
+        "matched": int(counts["matched"]),
+        "total": int(counts["total"]),
+        "render_artifact_id": str(art.id),
+        "shown": shown,
+    }
 
 
 def do_autograde(db: Session, run: GraderRun, sub: Submission) -> None:
@@ -164,7 +229,9 @@ def process(db: Session, run: GraderRun) -> None:
     sub = db.get(Submission, run.submission_id)
     assert sub is not None
     try:
-        if run.kind == RunKind.render:
+        if run.kind == RunKind.snapshot:
+            do_snapshot(db, run, sub)
+        elif run.kind == RunKind.render:
             do_render(db, run, sub)
         elif run.kind == RunKind.autograde:
             if sub.status == SubmissionStatus.received:

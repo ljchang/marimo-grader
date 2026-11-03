@@ -208,7 +208,7 @@ def test_autograde_off_still_renders(client, seed):
     assert _patch(client, seed, autograde=False).status_code == 200
     r = _submit(client, seed, "f00abc1")
     assert r.status_code == 201
-    assert _runs(r.json()["id"]) == {RunKind.render}
+    assert _runs(r.json()["id"]) == {RunKind.snapshot, RunKind.render}
 
 
 # -- whole-notebook submission ------------------------------------------------------
@@ -234,7 +234,7 @@ def test_notebook_question_graded(client, seed):
     r = _submit(client, seed, "f00abc1", qid="notebook")
     assert r.status_code == 201, r.text
     assert r.json()["status"] == "received"
-    assert _runs(r.json()["id"]) == {RunKind.render}
+    assert _runs(r.json()["id"]) == {RunKind.snapshot, RunKind.render}
 
     login(client, "prof")
     tri = client.get(f"/api/v1/offerings/{seed.offering_id}/triage").json()
@@ -313,11 +313,12 @@ def test_presign_expires_at_close(client, seed, storage_on, fake_cf):  # noqa: F
 # -- render off: review the code and the files the student saved ----------------------
 
 
-def test_render_off_queues_nothing(client, seed):
+def test_render_off_queues_only_the_snapshot_render(client, seed):
     assert _patch(client, seed, autograde=False, render=False).status_code == 200
     r = _submit(client, seed, "f00abc1")
     assert r.status_code == 201
-    assert _runs(r.json()["id"]) == set()
+    # No re-run; the student's own outputs are still rendered (nothing executes).
+    assert _runs(r.json()["id"]) == {RunKind.snapshot}
     tok = notebook_token(client, "f00abc1")
     j = client.get(
         f"/api/v1/submissions/{r.json()['id']}", headers={"Authorization": f"Bearer {tok}"}

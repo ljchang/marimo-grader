@@ -35,11 +35,13 @@ from grader.models import (
     Question,
     Role,
     RunKind,
+    RunStatus,
     Submission,
     SubmissionStatus,
     User,
+    utcnow,
 )
-from grader.services import availability, notebook_submission, storage
+from grader.services import audit, availability, notebook_submission, storage
 from grader.services.artifacts import store
 from grader.services.events import Event, bus
 from grader.services.grades import final_score
@@ -56,6 +58,8 @@ class SubmissionIn(BaseModel):
     outputs: dict[str, Any] = Field(default_factory=dict)
     client: dict[str, Any] = Field(default_factory=dict)
     client_submission_id: str | None = Field(default=None, max_length=64)
+    # marimo's session snapshot, as the JSON text of __marimo__/session/<nb>.py.json.
+    snapshot: str | None = None
 
 
 def _resolve(
@@ -116,6 +120,44 @@ def submission_outputs(db: Session, s: Submission) -> dict:
         return {}
 
 
+def checked_snapshot(text: str, limit: int) -> tuple[bytes | None, str]:
+    """The snapshot's bytes if it is usable, and a word on why (for client_meta)."""
+    raw = text.encode()
+    if len(raw) > limit:
+        return None, f"dropped: {len(raw)} bytes over the {limit} limit"
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        return None, "dropped: not JSON"
+    if not isinstance(doc, dict) or not isinstance(doc.get("cells"), list):
+        return None, "dropped: not a marimo session"
+    return raw, f"{len(raw)} bytes"
+
+
+# Where the render a grader sees came from, by the kind of its artifact.
+RENDER_SOURCES = {
+    "render": "rerun",  # the worker ran the notebook (marimo export html)
+    "render-snapshot": "snapshot",  # the student's own outputs, nothing executed
+    "render-attached": "attached",  # HTML an instructor attached afterwards
+}
+
+
+def render_info(db: Session, s: Submission) -> dict | None:
+    """What the current render is: a re-run, or the student's own outputs (and
+    from which snapshot, matching how many cells)."""
+    if s.render_artifact_id is None:
+        return None
+    art = db.get(Artifact, s.render_artifact_id)
+    info: dict = {"source": RENDER_SOURCES.get(art.kind if art else "", "rerun")}
+    for r in s.runs:
+        res = r.results or {}
+        if res.get("render_artifact_id") == str(s.render_artifact_id):
+            info.update(
+                {k: res[k] for k in ("snapshot", "matched", "total", "saved_at") if k in res}
+            )
+    return info
+
+
 def submission_json(db: Session, s: Submission, *, include_feedback: bool = True) -> dict:
     sc = final_score(db, s)
     out = {
@@ -130,6 +172,7 @@ def submission_json(db: Session, s: Submission, *, include_feedback: bool = True
         "late": availability.Window.of(s.question.assignment).is_late(s.submitted_at),
         "netid": s.enrollment.user.netid,
         "render_url": f"/api/v1/submissions/{s.id}/render" if s.render_artifact_id else None,
+        "render_info": render_info(db, s),
         # False when the assignment skips the re-run: show the code, not "still rendering".
         "renders": bool((s.question.assignment.settings or {}).get("render", True)),
         "files_url": f"/api/v1/submissions/{s.id}/files",
@@ -221,6 +264,15 @@ def create_submission(
         if len(raw) > s.max_outputs_bytes:
             raise api_error(413, "too_large", "outputs too large")
         out_art = st.put(db, raw, kind="outputs", content_type="application/json")
+    client_meta = {k: str(v)[:120] for k, v in body.client.items()}
+    snap_art = None
+    if body.snapshot:
+        snap, why = checked_snapshot(body.snapshot, s.max_snapshot_bytes)
+        if snap is not None:
+            snap_art = st.put(db, snap, kind="snapshot", content_type="application/json")
+        # A bad snapshot never costs the student the attempt: the notebook is
+        # what is graded, and the grading view still shows its code.
+        client_meta["snapshot"] = why
 
     sub = Submission(
         enrollment_id=enrollment.id,
@@ -229,8 +281,9 @@ def create_submission(
         attempt_no=n_prev + 1,
         notebook_artifact_id=nb_art.id,
         outputs_artifact_id=out_art.id if out_art else None,
+        snapshot_artifact_id=snap_art.id if snap_art else None,
         client_check_results=body.check_results[:200],
-        client_meta={k: str(v)[:120] for k, v in body.client.items()},
+        client_meta=client_meta,
         client_submission_id=body.client_submission_id,
     )
     db.add(sub)
@@ -243,6 +296,10 @@ def create_submission(
         db.add(GraderRun(submission_id=sub.id, kind=RunKind.autograde))
     if notebook_submission.is_receipt(question):
         sub.status = SubmissionStatus.graded
+    # The student's own outputs, rendered from their session snapshot without
+    # running anything (a no-op when none came with it): the render when the assignment
+    # does not re-run, and the first one to arrive when it does.
+    db.add(GraderRun(submission_id=sub.id, kind=RunKind.snapshot))
     if settings.get("render", True):
         db.add(GraderRun(submission_id=sub.id, kind=RunKind.render))
     db.flush()
@@ -385,6 +442,88 @@ def get_files(
             }
         )
     return {"enabled": True, "prefix": f"/private/{a.slug}/", "files": files}
+
+
+class AttachOutputsIn(BaseModel):
+    """Outputs produced after the fact, for an attempt that arrived without them.
+
+    ``snapshot`` is marimo's session JSON (rendered by the worker, nothing
+    executed); ``html`` is a finished render such as ``marimo export html``.
+    """
+
+    snapshot: str | None = None
+    html: str | None = None
+    note: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/submissions/{submission_id}/outputs", status_code=201)
+def attach_outputs(
+    submission_id: uuid.UUID,
+    body: AttachOutputsIn,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Instructor backfill: attach a snapshot or a render to an existing attempt.
+
+    The attempt itself (its notebook) is unchanged; what a grader sees in the
+    Rendered tab is labelled as attached, never as the student's own outputs.
+    """
+    sub = db.get(Submission, submission_id)
+    m = membership_for(db, user, sub.enrollment.offering_id) if sub is not None else None
+    if sub is None or m is None or not m.is_staff():
+        raise api_error(404, "not_found", "submission not found")
+    if m.role != Role.instructor:
+        raise api_error(403, "forbidden", "only an instructor can attach outputs")
+    if (body.snapshot is None) == (body.html is None):
+        raise api_error(422, "bad_request", "send exactly one of snapshot or html")
+    s = get_settings()
+    st = store()
+    before = {
+        "snapshot_artifact_id": str(sub.snapshot_artifact_id or ""),
+        "render_artifact_id": str(sub.render_artifact_id or ""),
+    }
+    if body.snapshot is not None:
+        snap, why = checked_snapshot(body.snapshot, s.max_snapshot_bytes)
+        if snap is None:
+            raise api_error(422, "bad_snapshot", why)
+        art = st.put(db, snap, kind="snapshot-attached", content_type="application/json")
+        sub.snapshot_artifact_id = art.id
+        run = GraderRun(submission_id=sub.id, kind=RunKind.snapshot)
+    else:
+        html = body.html.encode()
+        if len(html) > s.max_snapshot_bytes:
+            raise api_error(413, "too_large", f"render exceeds {s.max_snapshot_bytes} bytes")
+        art = st.put(db, html, kind="render-attached", content_type="text/html")
+        sub.render_artifact_id = art.id
+        now = utcnow()
+        run = GraderRun(
+            submission_id=sub.id,
+            kind=RunKind.snapshot,
+            status=RunStatus.succeeded,
+            started_at=now,
+            finished_at=now,
+            results={"snapshot": "attached-html", "render_artifact_id": str(art.id)},
+        )
+    if body.note:
+        run.results = {**(run.results or {}), "note": body.note}
+    db.add(run)
+    db.flush()
+    audit.record(
+        db,
+        actor_id=user.id,
+        offering_id=m.offering.id,
+        entity="submission",
+        entity_id=sub.id,
+        action="attach_outputs",
+        before=before,
+        after={
+            "kind": art.kind,
+            "artifact_id": str(art.id),
+            "netid": sub.enrollment.user.netid,
+            "note": body.note or "",
+        },
+    )
+    return {"id": str(sub.id), "kind": art.kind, "run_id": str(run.id), "status": run.status.value}
 
 
 @router.get("/offerings/{offering_id}/me/submissions")

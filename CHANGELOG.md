@@ -13,6 +13,43 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Added
+
+- **Every submission is graded from the student's own outputs.** Client 0.3.0's
+  Submit sends marimo's session snapshot (`__marimo__/session/<notebook>.py.json`,
+  every cell's last outputs) with the notebook, waiting a couple of seconds so
+  the newest outputs are in it. A new worker step renders it to HTML without
+  executing anything, in about a second, by matching outputs to the submitted
+  cells by code hash (cells with identical code are paired in order, which
+  marimo's own matching does not do); a cell edited after it last ran shows its
+  code without its stale output. It is the render for assignments with re-run
+  off (the grading view used to show only code and saved files there) and the
+  first render otherwise, until the re-run replaces it. The grading view says
+  which it is ("The student's own outputs, saved with this attempt · all 41
+  cells") and the queue repeats it next to the score. Nothing changes in
+  assignment notebooks and students do nothing. The worker pins
+  `marimo==0.25.2`: the step uses marimo internals.
+- **`grader attach-outputs`** attaches a session snapshot or an HTML render to
+  an existing attempt (instructors only, recorded in the change log, labelled
+  as attached). For attempts made before client 0.3.0, such as the Fall 2026
+  exam: re-run the notebook locally with `marimo export session`, then attach
+  the session. API: `POST /api/v1/submissions/{id}/outputs`.
+
+### Fixed
+
+- **Saved files thumbnails load.** The web app's Content-Security-Policy
+  allowed images only from its own origin, so every thumbnail (a presigned
+  link to `<account>.r2.cloudflarestorage.com`) was blocked; the links worked
+  because opening one is a navigation. `img-src` now allows
+  `https://*.r2.cloudflarestorage.com`; the web container needs redeploying.
+
+### Upgrade notes
+
+- One migration (`submissions.snapshot_artifact_id`), applied by the deploy's `migrate` step.
+- New settings: `GRADER_MAX_SNAPSHOT_BYTES` (10 MiB), `GRADER_SNAPSHOT_TIMEOUT` (120 s).
+- Students need client 0.3.0 for their snapshots to be sent; older clients
+  still submit, and those attempts show code until outputs are attached.
+
 ## [0.1.11] — 2026-10-21
 
 ### Added

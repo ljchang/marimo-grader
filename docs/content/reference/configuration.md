@@ -16,6 +16,7 @@ With `GRADER_ENV=prod` the service **refuses to start** unless the session secre
 | `GRADER_CORS_ORIGINS` | localhost, MoLab, dartbrains.org | JSON list of origins the notebook widget may call from |
 | `GRADER_MAX_NOTEBOOK_BYTES` | 2 MiB | largest accepted notebook |
 | `GRADER_MAX_OUTPUTS_BYTES` | 8 MiB | largest accepted written-answer payload |
+| `GRADER_MAX_SNAPSHOT_BYTES` | 10 MiB | largest session snapshot kept with an attempt (a bigger one is dropped, not refused; also the limit for an attached render) |
 
 MoLab's per-session `*.molab.run` subdomains are matched by a built-in regular expression rather than the origin list, because the sandbox id changes every session. See [CORS](../auth/sessions-and-tokens.md#cors-which-origins-may-call).
 
@@ -82,6 +83,7 @@ Plain environment variables read by the worker process.
 | `GRADER_USE_BUBBLEWRAP` | off | run notebooks inside bubblewrap (needs the compose `security_opt` settings) |
 | `GRADER_AUTOGRADE_TIMEOUT` | 300 | seconds a submission may run |
 | `GRADER_RENDER_TIMEOUT` | 180 | seconds a render may take |
+| `GRADER_SNAPSHOT_TIMEOUT` | 120 | seconds rendering a student's session snapshot may take (it executes nothing; seconds is typical) |
 | `GRADER_RLIMIT_AS` | 4 GiB | address-space cap for the notebook process |
 | `GRADER_SANDBOX_DIR` | beside the artifact dir | where prepared notebook environments are kept |
 | `GRADER_CLIENT_REQUIREMENT` | `marimo-grader-client` | requirement string substituted for the client package when building environments |

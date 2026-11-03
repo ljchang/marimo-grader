@@ -219,7 +219,12 @@ def triage(m: Membership = Depends(require_staff), db: Session = Depends(get_db)
 
 
 def _last_error(sub: Submission) -> str | None:
-    failed = [r for r in sub.runs if r.status == RunStatus.failed and r.error]
+    # A failed snapshot render leaves the attempt gradable; it is not why it failed.
+    failed = [
+        r
+        for r in sub.runs
+        if r.status == RunStatus.failed and r.error and r.kind != RunKind.snapshot
+    ]
     if not failed:
         return None
     return max(failed, key=lambda r: r.finished_at or r.queued_at).error

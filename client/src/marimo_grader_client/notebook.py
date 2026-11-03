@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -149,6 +150,81 @@ def read_notebook_source(path: str | os.PathLike[str] | None = None) -> str | No
         return _read_text(path)
     p = notebook_path()
     return _read_text(p) if p is not None else None
+
+
+# --------------------------------------------------------------------------
+# marimo's session snapshot (the student's own outputs)
+# --------------------------------------------------------------------------
+
+# Matches the server's limit (GRADER_MAX_SNAPSHOT_BYTES); a bigger snapshot is
+# left out of the submission, which then shows its code without outputs.
+MAX_SNAPSHOT_BYTES = 10 * 1024 * 1024
+
+
+def session_snapshot_path(nb: str | os.PathLike[str] | None = None) -> Path | None:
+    """``__marimo__/session/<notebook>.py.json`` next to the notebook.
+
+    marimo (edit mode, locally and on molab) rewrites it a second or two after
+    any cell's outputs change: every cell's outputs, tagged with a hash of the
+    code that produced them. The grader renders a submission from it without
+    re-running anything.
+    """
+    p = Path(nb) if nb is not None else notebook_path()
+    if p is None:
+        return None
+    return p.parent / "__marimo__" / "session" / f"{p.name}.json"
+
+
+def _mtime(p: Path) -> float | None:
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return None
+
+
+def read_session_snapshot(
+    path: str | os.PathLike[str] | None = None,
+    *,
+    wait: float = 2.5,
+    poll: float = 0.25,
+    max_bytes: int = MAX_SNAPSHOT_BYTES,
+    sleep=time.sleep,
+) -> tuple[str | None, str]:
+    """The session snapshot's JSON text and a short note on how it went.
+
+    marimo writes the snapshot shortly *after* outputs change, so outputs from
+    the last few seconds may not be in the file yet. This waits up to ``wait``
+    seconds and returns early once a fresh write lands. Never raises: a missing,
+    unreadable or oversized snapshot comes back as ``(None, why)``.
+    """
+    p = Path(path) if path is not None else session_snapshot_path()
+    if p is None:
+        return None, "no notebook path"
+    before = _mtime(p)
+    waited = 0.0
+    while waited < wait:
+        sleep(poll)
+        waited += poll
+        now = _mtime(p)
+        if now is not None and now != before:
+            sleep(poll)  # let the write finish
+            break
+    for _ in range(3):
+        try:
+            raw = p.read_bytes()
+        except OSError:
+            return None, "no session snapshot"
+        if len(raw) > max_bytes:
+            return None, f"skipped: {len(raw)} bytes over {max_bytes}"
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            sleep(poll)  # caught mid-write
+            continue
+        if not isinstance(doc, dict) or "cells" not in doc:
+            return None, "not a marimo session"
+        return raw.decode("utf-8"), f"{len(raw)} bytes"
+    return None, "unreadable session snapshot"
 
 
 # --------------------------------------------------------------------------

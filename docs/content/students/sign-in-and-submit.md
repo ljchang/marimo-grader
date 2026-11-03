@@ -52,6 +52,7 @@ Your **whole notebook**, not just the question you pressed Submit on, plus the r
 - Work on other questions is included — which is fine, and how a grader can see your working.
 - A written answer only arrives if the question was set up to send it, which your instructor handles. If a text box is followed by a Submit button, it is being sent.
 - Your notebook is read from disk at the moment you click, so last-second edits count.
+- **Your outputs go with it**: the results, tables and figures your cells last showed, as marimo saved them next to your notebook (`__marimo__/session/`). Your grader reads your work as you saw it, without re-running it. Submit waits a couple of seconds so the newest outputs are included. A cell you edited after it last ran shows its code without its old output, so run what you changed before you submit.
 
 ## Versions and the "newer version" notice
 

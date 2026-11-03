@@ -25,7 +25,9 @@ Being exempt from the window also means staff never see what students see. **Pre
 
 Turn **autograde** off when nothing should be run against checks. Submissions are still rendered: the grader re-runs the notebook and stores the HTML you read. Raise `render_timeout` (30–3600 s) when that re-run is a real analysis.
 
-Turn **re-run** (`render`) off when the notebook is too heavy for the grader — an analysis over a few gigabytes of data will not fit on a small worker, and the time it takes grows with the data. The grading view then shows the submitted code and a **Saved files** panel: everything the student wrote under `storage.private()/<slug>/` (figures, CSVs, statistical maps), with download links. Ask students to save their results there:
+Turn **re-run** (`render`) off when the notebook is too heavy for the grader — an analysis over a few gigabytes of data will not fit on a small worker, and the time it takes grows with the data. You still read every cell's output: each submission carries the student's own outputs (marimo's session snapshot), which the grader renders without running anything, so the grading view opens on what the student saw. Students do nothing for this, and the notebook needs no change. For an attempt that arrived without them (made with an older client), you can attach outputs with [`grader attach-outputs`](../reference/cli.md#grader-attach-outputs) after re-running it yourself.
+
+The grading view also has a **Saved files** panel: everything the student wrote under `storage.private()/<slug>/` (figures, CSVs, statistical maps), with download links. Ask students to save their results there:
 
 ```python
 out = storage.private()

@@ -1,22 +1,48 @@
 <script lang="ts">
-  // What a grader reads for one attempt: the worker's render (code above each
-  // output) when the assignment re-runs submissions, with the submitted source a
-  // click away; otherwise just the source. Either way, the files the student saved
-  // under storage.private()/<slug>/ -- the hand-in for notebooks too heavy to
-  // re-run -- flagged when they changed after the deadline.
-  import { api, errorMessage, type Submission, type SubmissionFiles } from '$lib/api';
+  // What a grader reads for one attempt: a render (code above each output) with the
+  // submitted source a click away. The render is the student's own outputs, taken
+  // from marimo's session snapshot without running anything, until the worker's
+  // re-run replaces it (for assignments that re-run); the label says which. With no
+  // render at all, just the source. Either way, the files the student saved under
+  // storage.private()/<slug>/, flagged when they changed after the deadline.
+  import { api, errorMessage, type RenderInfo, type Submission, type SubmissionFiles } from '$lib/api';
   import { fmtDateTime } from '$lib/format';
   import RenderFrame from './RenderFrame.svelte';
 
-  let { submission, height = '100%' }: { submission: Submission; height?: string } = $props();
+  let {
+    submission,
+    height = '100%',
+    own = false,
+  }: { submission: Submission; height?: string; own?: boolean } = $props();
 
   let code = $state<string | null>(null);
   let files = $state<SubmissionFiles | null>(null);
   let error = $state<string | null>(null);
 
   const rerun = $derived(submission.renders !== false);
+  // Something for the Rendered tab: a render exists, or a re-run is on its way.
+  const renders = $derived(rerun || !!submission.render_url);
   let tab = $state<'render' | 'code'>('render');
-  const showCode = $derived(!rerun || tab === 'code');
+  const showCode = $derived(!renders || tab === 'code');
+  const label = $derived(renderLabel(submission.render_info, own));
+
+  function cells(i: RenderInfo): string {
+    if (i.matched == null || i.total == null) return '';
+    if (i.matched === i.total) return `all ${i.total} cells`;
+    return `${i.matched} of ${i.total} cells (a cell edited after it last ran shows its code only)`;
+  }
+
+  /** Headline and detail for the render, or null when there is nothing to say. */
+  function renderLabel(i: RenderInfo | null | undefined, own: boolean): [string, string] | null {
+    if (!i) return null;
+    const whose = own ? 'Your own outputs' : "The student's own outputs";
+    if (i.source === 'snapshot') {
+      if (i.snapshot === 'attached') return ['Outputs attached by the instructor', cells(i)];
+      return [`${whose}, saved with this attempt`, cells(i)];
+    }
+    if (i.source === 'attached') return ['Render attached by the instructor', ''];
+    return ['Re-run by the grader', ''];
+  }
 
   // A new attempt starts on the render; the source is fetched once, when first shown.
   $effect(() => {
@@ -79,16 +105,21 @@
 
   {#if error}<p class="muted small">{error}</p>{/if}
 
-  {#if rerun}
+  {#if renders}
     <div class="tabs" role="tablist" aria-label="Submission view">
       <button role="tab" aria-selected={tab === 'render'} class:on={tab === 'render'} onclick={() => (tab = 'render')}>Rendered</button>
       <button role="tab" aria-selected={tab === 'code'} class:on={tab === 'code'} onclick={() => (tab = 'code')}>Code</button>
+      {#if label && tab === 'render'}
+        <span class="source small" class:own={submission.render_info?.source === 'snapshot'}>
+          {label[0]}{#if label[1]}<span class="muted">{' · '}{label[1]}</span>{/if}
+        </span>
+      {/if}
     </div>
   {/if}
 
   {#if showCode}
     <section class="code">
-      {#if !rerun}<h3>Submitted notebook <span class="muted small">(not re-run for this assignment)</span></h3>{/if}
+      {#if !renders}<h3>Submitted notebook <span class="muted small">(not re-run for this assignment)</span></h3>{/if}
       {#if code === null}
         <p class="muted small">Loading…</p>
       {:else}
@@ -127,6 +158,17 @@
   .tabs button.on {
     color: var(--ink);
     border-bottom-color: var(--accent);
+  }
+  .source {
+    margin-left: auto;
+    align-self: center;
+    padding: 2px 8px;
+    border-radius: var(--radius);
+    color: var(--muted);
+  }
+  .source.own {
+    color: var(--ink);
+    background: var(--accent-soft);
   }
   .render {
     flex: 1;

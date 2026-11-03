@@ -284,7 +284,9 @@ export interface Submission {
   score?: Score | null;
   feedback?: string | null;
   render_url?: string | null;
-  /** False when the assignment skips the re-run: show the code, not "still rendering". */
+  /** Where the render came from: a re-run, or the student's own outputs. */
+  render_info?: RenderInfo | null;
+  /** False when the assignment skips the re-run. The student's own outputs may still render. */
   renders?: boolean;
   files_url?: string;
   /** Structured answers sent with the attempt (e.g. text-area values). */
@@ -293,6 +295,20 @@ export interface Submission {
   error?: string | null;
   client?: SubmissionClient;
   rubric?: RubricItem[];
+}
+
+/**
+ * What the Rendered tab shows. `snapshot`: the student's own outputs from marimo's
+ * session snapshot, nothing re-run; `matched` of `total` cells had outputs for their
+ * current code. `rerun`: the grader ran the notebook. `attached`: an instructor
+ * attached a render afterwards.
+ */
+export interface RenderInfo {
+  source: 'snapshot' | 'rerun' | 'attached';
+  /** Which snapshot: sent with the attempt, or attached by an instructor later. */
+  snapshot?: 'submitted' | 'attached' | 'attached-html';
+  matched?: number;
+  total?: number;
 }
 
 /** What the student saved under storage.private()/<slug>/ (GET /submissions/{id}/files). */

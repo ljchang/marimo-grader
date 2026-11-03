@@ -37,7 +37,13 @@ Each hand-graded or hybrid question has a queue: one entry per student, showing 
 
 The rendered notebook fills the left pane; the right pane holds the score, the feedback box, and any written answers the student submitted.
 
-The left pane is the student's notebook, rendered by the grader after execution: each cell's code above the output it produced, so you read the answer and not only whether a check passed. **Code** switches to the notebook source exactly as submitted. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
+The left pane is the student's notebook rendered with each cell's code above its output, so you read the answer and not only whether a check passed. The label above it says where those outputs came from:
+
+- **The student's own outputs, saved with this attempt** — what the student's notebook showed when they clicked Submit, sent with the attempt and rendered without running anything. It appears within seconds, for every assignment. A cell the student edited after it last ran shows its code only; the label counts how many cells with code kept their outputs (*4 of 5 cells*). An attempt that arrived without them (from a client before 0.3.0, or a snapshot over 10 MiB) shows its code only, until you attach outputs.
+- **Re-run by the grader** — for assignments that re-run submissions, the grader's own execution replaces the student's outputs once it finishes.
+- **Outputs attached by the instructor** / **Render attached by the instructor** — added afterwards with [`grader attach-outputs`](../reference/cli.md#grader-attach-outputs).
+
+The queue's right pane repeats *Graded from the student's own outputs* next to the score whenever that is what you are looking at. **Code** switches to the notebook source exactly as submitted. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 
 The right pane holds the score. If the question has a rubric, each item has its own points, grouped under its part with a subtotal, and the total sums them; you can override the total. **Full marks for the blank items** fills every item you have not scored, so you can start from full marks and take points off. Feedback is a free text box the student sees.
 
