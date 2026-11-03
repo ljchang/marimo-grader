@@ -191,7 +191,7 @@
                               <td>{#if sub.render_url || sub.renders === false}<button class="quiet" onclick={() => (open = open === sub.id ? null : sub.id)}>{open === sub.id ? 'Hide' : 'View'}</button>{/if}</td>
                             </tr>
                             {#if open === sub.id}
-                              <tr><td colspan="6" class="wrap"><SubmissionView submission={sub} height="520px" /></td></tr>
+                              <tr><td colspan="6" class="wrap"><SubmissionView submission={sub} height="520px" own /></td></tr>
                             {/if}
                           {/each}
                         </tbody>

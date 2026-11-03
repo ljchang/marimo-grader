@@ -52,4 +52,4 @@ It checks the local disk, then results your instructor computed ahead of time, t
 
 ## What your instructor can see
 
-Your private storage is visible to you, your instructor and the course's TAs — the same people who see your submissions. Other students cannot see it, and the storage never shows anyone's name.
+Your private storage is visible to you, your instructor and the course's TAs — the same people who see your submissions. It also holds your assignment notebooks' [autosave](sign-in-and-submit.md#autosave), under `<assignment>/.autosave/`; staff do not see that folder among your saved files, but the grader may render your submission from it. Other students cannot see it, and the storage never shows anyone's name.

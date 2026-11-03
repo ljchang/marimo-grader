@@ -29,7 +29,7 @@ def test_submit_creates_immutable_attempt_and_queues_runs(client, seed):
         assert [s.attempt_no for s in subs] == [1, 2]
         assert subs[0].notebook_artifact_id != subs[1].notebook_artifact_id
         runs = db.query(GraderRun).filter(GraderRun.submission_id == subs[0].id).all()
-        assert {r.kind for r in runs} == {RunKind.autograde, RunKind.render}
+        assert {r.kind for r in runs} == {RunKind.autograde, RunKind.render, RunKind.snapshot}
         assert all(r.status == RunStatus.queued for r in runs)
 
 

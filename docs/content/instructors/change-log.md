@@ -15,6 +15,7 @@ It is not part of the daily navigation; it is linked from the roster page and fr
 | Assignment version published | version number and question ids |
 | Canvas export | which assignments |
 | Submission re-queued for grading | student and question |
+| Outputs attached to a submission (`grader attach-outputs`) | student, what was attached, the note |
 
 Entries are append-only. Filter by NetID, entity, action, or reason.
 

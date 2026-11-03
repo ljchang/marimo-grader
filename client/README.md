@@ -97,19 +97,38 @@ moment the button is clicked.
   `ABCD-1234` code and the URL for manual use, polls
   `POST /api/v1/auth/device/token` until approval and stores the token in the
   browser's `localStorage` under `grader:<server>:token`. The token also lands
-  in the widget's `token` / `netid` traits.
+  in the widget's `token` / `netid` attributes (by message, not a synced trait).
+  In a published assignment, signing in also starts **autosave** (below).
 - **Submit** posts `{assignment_version_id, question_id, notebook,
-  check_results, outputs, client}` to `POST /api/v1/submissions` with the
+  check_results, outputs, client, snapshot}` to `POST /api/v1/submissions` with the
   bearer token, shows the attempt number and time, then polls
   `GET /api/v1/submissions/{id}` every 3 s (up to 2 min) and shows
   `score.total / max_points` plus feedback once graded. A `401` shows an
-  inline sign-in button.
+  inline sign-in button. `snapshot` is marimo's session snapshot
+  (`__marimo__/session/<notebook>.py.json`): every cell's last outputs, read at
+  the click (waiting up to ~2.5 s for marimo's next write) and sent by message,
+  never through the synced `payload` trait. The grader renders the attempt from
+  it without re-running anything. `client.snapshot` says how that went.
 - **Feedback** reads `GET /api/v1/offerings/{offering_id}/me/submissions?assignment_id=...`
   and renders the latest attempt for the question.
 
 Only the browser can reach the grader, so nothing works in a kernel without a
 readable notebook file (for example WASM): `read_notebook_source()` returns
 `None` and the submit button explains that the notebook cannot be sent.
+
+## Autosave
+
+From the first successful sign-in (`Grader().signin_button()`, `storage.signin_button()`
+or `storage.connect()`), one daemon thread per kernel copies the notebook and its
+session snapshot to `private/<grader-assignment>/.autosave/{notebook.py,session.json}`
+whenever either changes (checked every 45 s), and a copy of both to
+`.autosave/history/<UTC stamp>/` at most every 10 minutes, keeping 20. The sign-in
+widget shows *Autosave on · last saved 14:32*; it asks the kernel for that by
+message, so the status never becomes part of the button's value (which marimo
+folds into downstream persistent-cache keys). It never blocks or raises into the
+kernel, and does nothing under `GRADER_RENDER`, in WASM, with a local
+`GRADER_STORAGE_ROOT`, for a notebook without `grader-assignment`, or with
+`GRADER_AUTOSAVE=0`. See `marimo_grader_client.autosave`.
 
 ## Python API
 
@@ -118,6 +137,7 @@ from marimo_grader_client import Grader, GraderWidget, check, __version__
 from marimo_grader_client.notebook import (
     read_notebook_source, read_assignment_metadata,
     collect_check_results, build_payload,
+    session_snapshot_path, read_session_snapshot,
 )
 ```
 
@@ -125,6 +145,7 @@ from marimo_grader_client.notebook import (
   - `.signin_button()`, `.submit_button(question_id, outputs=None)`, `.feedback(question_id)` -> `GraderWidget`
   - `.check(label, conditions, **kw)` -> callout HTML; `.check_results()` -> recorded records
   - `.build_payload(outputs=None)` -> the submission body (minus the ids the widget adds)
+  - `.snapshot_extra()` -> `{"snapshot": <session JSON>, "client": {...}}`, merged into the body at the click
   - `.metadata` -> parsed PEP 723 metadata
 - `GraderWidget` traits: `server`, `mode` (`signin|submit|feedback`),
   `assignment_version_id`, `question_id`, `offering_id`, `assignment_id`,

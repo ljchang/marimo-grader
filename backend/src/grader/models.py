@@ -76,6 +76,9 @@ class RunKind(str, enum.Enum):
     autograde = "autograde"
     render = "render"
     ai_suggest = "ai_suggest"
+    # Render the student's own outputs from marimo's session snapshot, without
+    # executing anything (grader.worker.snapshot_render).
+    snapshot = "snapshot"
 
 
 class RunStatus(str, enum.Enum):
@@ -252,7 +255,9 @@ class Artifact(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     size: Mapped[int] = mapped_column(Integer)
     content_type: Mapped[str] = mapped_column(String(100))
-    kind: Mapped[str] = mapped_column(String(32))  # notebook|render|log|feedback|roster
+    kind: Mapped[str] = mapped_column(
+        String(32)
+    )  # notebook|render|render-snapshot|snapshot|log|...
     storage_key: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -278,6 +283,10 @@ class Submission(Base):
     notebook_artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifacts.id"))
     outputs_artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifacts.id"))
     render_artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifacts.id"))
+    # marimo's session snapshot (__marimo__/session/<nb>.py.json) as the student's
+    # kernel last saw it: every cell's outputs, keyed by a hash of its code. Sent with
+    # the attempt, or attached later by an instructor (POST /submissions/{id}/outputs).
+    snapshot_artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifacts.id"))
     client_check_results: Mapped[list] = mapped_column(JSON, default=list)
     client_meta: Mapped[dict] = mapped_column(JSON, default=dict)
     # Idempotency key chosen by the widget per click; a retry returns the same attempt.

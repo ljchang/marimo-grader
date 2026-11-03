@@ -20,6 +20,15 @@ An exam is published the same way, plus the window and how it is submitted::
         --close 2026-11-23T23:59-05:00 --late-policy reject \
         --no-autograde --notebook-points 100
 
+An attempt that arrived without the student's outputs (a notebook too heavy to
+re-run, submitted before the client sent its session) can have them attached
+afterwards. Re-run it locally, then attach the session marimo saved, or a render::
+
+    marimo export session student.py      # writes __marimo__/session/student.py.json
+    grader attach-outputs --server https://grader.dartbrains.org \
+        --offering neuroimaging/2026-fall --assignment final-exam --netid f00abc1 \
+        --snapshot __marimo__/session/student.py.json --note "re-run locally"
+
 ``--notebook-points`` turns on whole-notebook submission (0 = a receipt, nothing
 to grade). With it on, the instructor notebook needs no ``_marks`` cell. The
 settings are applied before the version is published, and any you leave out
@@ -169,6 +178,58 @@ def cmd_publish(a: argparse.Namespace) -> None:
         print(
             f"Served at {v['student_url']}  (MoLab: {v.get('molab_url', v['student_url'].replace('/student.py', '/molab'))})"
         )
+
+
+def _latest_submission(
+    client: httpx.Client,
+    server: str,
+    h: dict,
+    offering: str,
+    slug: str,
+    netid: str,
+    qid: str | None,
+) -> str:
+    """The newest attempt by ``netid`` on assignment ``slug`` (and question ``qid``)."""
+    offering_id, _, _ = _resolve_offering(client, server, offering, h)
+    r = client.get(f"{server}/api/v1/offerings/{offering_id}/assignments", headers=h)
+    r.raise_for_status()
+    match = next((x for x in r.json() if x["slug"] == slug), None)
+    if match is None:
+        sys.exit(f"no assignment {slug!r} in {offering}")
+    r = client.get(f"{server}/api/v1/offerings/{offering_id}/students/{netid}", headers=h)
+    if r.status_code != 200:
+        sys.exit(f"student {netid!r} not found ({r.status_code})")
+    subs = [
+        x
+        for x in r.json()["submissions"]
+        if x["assignment_id"] == match["id"] and (qid is None or x["qid"] == qid)
+    ]
+    if not subs:
+        sys.exit(f"{netid} has no submission for {slug}" + (f" {qid}" if qid else ""))
+    latest = max(subs, key=lambda x: x["submitted_at"])
+    print(f"{netid} {slug} {latest['qid']} attempt {latest['attempt_no']} ({latest['id']})")
+    return latest["id"]
+
+
+def cmd_attach_outputs(a: argparse.Namespace) -> None:
+    """Attach a session snapshot or a render to an existing submission (instructor)."""
+    server = a.server.rstrip("/")
+    path = Path(a.snapshot or a.html)
+    body: dict = {"snapshot" if a.snapshot else "html": path.read_text()}
+    if a.note:
+        body["note"] = a.note
+    with httpx.Client(timeout=120) as client:
+        token = a.token or _device_login(client, server)
+        h = {"Authorization": f"Bearer {token}"}
+        sub_id = a.submission or _latest_submission(
+            client, server, h, a.offering, a.assignment, a.netid, a.qid
+        )
+        r = client.post(f"{server}/api/v1/submissions/{sub_id}/outputs", headers=h, json=body)
+        if r.status_code >= 400:
+            sys.exit(f"attach failed: {r.status_code} {r.text}")
+        j = r.json()
+        what = "render" if a.html else "snapshot (the worker renders it shortly)"
+        print(f"Attached {path.name} to {sub_id} as a {what}; {j['kind']}, run {j['status']}")
 
 
 def _settings_from_args(a: argparse.Namespace) -> dict:
@@ -390,12 +451,31 @@ def main(argv: list[str] | None = None) -> None:
     rr.add_argument("--limit", type=int, help="stop after this many")
     rr.add_argument("--poll", type=float, default=5.0, help="seconds between queue checks")
     rr.set_defaults(fn=cmd_rerender)
+    att = sub.add_parser(
+        "attach-outputs",
+        help="attach a session snapshot or an HTML render to a submission (instructor)",
+    )
+    att.add_argument("--server", required=True)
+    which = att.add_mutually_exclusive_group(required=True)
+    which.add_argument("--submission", help="submission id")
+    which.add_argument("--netid", help="with --offering and --assignment: their latest attempt")
+    att.add_argument("--offering", help="offering id or course/term alias")
+    att.add_argument("--assignment", help="assignment slug")
+    att.add_argument("--qid", help="question id (default: any; the newest attempt wins)")
+    what = att.add_mutually_exclusive_group(required=True)
+    what.add_argument("--snapshot", help="marimo session JSON (__marimo__/session/<nb>.py.json)")
+    what.add_argument("--html", help="a finished render, e.g. from `marimo export html`")
+    att.add_argument("--note", help="why, kept with the run and in the audit log")
+    att.add_argument("--token", help="notebook token (skip interactive sign-in)")
+    att.set_defaults(fn=cmd_attach_outputs)
     ll = sub.add_parser(
         "login-link", help="print a one-time browser sign-in link for a NetID (operator use)"
     )
     ll.add_argument("netid")
     ll.set_defaults(fn=cmd_login_link)
     a = p.parse_args(argv)
+    if a.cmd == "attach-outputs" and a.netid and not (a.offering and a.assignment):
+        p.error("--netid needs --offering and --assignment")
     a.fn(a)
 
 

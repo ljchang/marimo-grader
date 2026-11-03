@@ -91,7 +91,7 @@ def test_custom_refresh_message_updates_payload():
     w.send = lambda content, buffers=None: sent.append(content)
     w._on_custom_msg(w, {"type": "refresh"}, [])
     assert w.payload == {"notebook": "v1"}
-    assert sent == [{"type": "payload"}]
+    assert sent == [{"type": "payload", "extra": {}}]
     w._on_custom_msg(w, {"type": "other"}, [])
     assert w.payload == {"notebook": "v1"}
 

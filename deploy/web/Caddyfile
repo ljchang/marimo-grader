@@ -41,12 +41,15 @@
 
 	# Everything else is the single-page app. The CSP allows the SAML form POST back
 	# from the Dartmouth IdP (login/logout.dartmouth.edu); everything else is
-	# same-origin. Keep in sync with the design document (§13).
+	# same-origin, apart from images on R2: the grading view's Saved files shows a
+	# student's figures as thumbnails straight from presigned R2 URLs
+	# (<account>.r2.cloudflarestorage.com), which 'self' alone blocks.
+	# Keep in sync with the design document (§13).
 	handle {
 		header {
 			X-Frame-Options DENY
 			Referrer-Policy strict-origin-when-cross-origin
-			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; form-action 'self' https://login.dartmouth.edu https://logout.dartmouth.edu; frame-ancestors 'none'; base-uri 'self'"
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.r2.cloudflarestorage.com; connect-src 'self'; frame-src 'self'; form-action 'self' https://login.dartmouth.edu https://logout.dartmouth.edu; frame-ancestors 'none'; base-uri 'self'"
 		}
 		root * /srv
 		encode zstd gzip

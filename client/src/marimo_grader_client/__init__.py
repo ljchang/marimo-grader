@@ -26,6 +26,8 @@ from marimo_grader_client.notebook import (
     env_metadata,
     read_assignment_metadata,
     read_notebook_source,
+    read_session_snapshot,
+    session_snapshot_path,
 )
 from marimo_grader_client.widget import GraderWidget
 
@@ -255,7 +257,32 @@ class Grader:
             self.read_source(), self.check_results(), outputs, client_info(__version__)
         )
 
+    def snapshot_extra(self, **kw: Any) -> dict[str, Any]:
+        """The student's own outputs for a submission: marimo's session snapshot
+        (``__marimo__/session/<notebook>.py.json``), read when Submit is clicked.
+
+        Goes into the request body by message, not into the widget's payload
+        trait. ``client.snapshot`` records what happened, so a submission without
+        one says why.
+        """
+        path = session_snapshot_path(self._notebook_path) if self._notebook_path else None
+        text, note = read_session_snapshot(path, **kw)
+        extra: dict[str, Any] = {"client": {**client_info(__version__), "snapshot": note}}
+        if text is not None:
+            extra["snapshot"] = text
+        return extra
+
     # -- widgets -----------------------------------------------------------
+
+    def _start_autosave(self, token: str, _netid: str = "") -> None:
+        from marimo_grader_client import autosave
+        from marimo_grader_client.storage import Token
+
+        autosave.start(
+            Token(token, self.server),
+            offering=self.offering_id or None,
+            notebook=self._notebook_path,
+        )
 
     def _widget(self, mode: str, **traits: Any) -> Any:
         if os.environ.get("GRADER_RENDER"):
@@ -277,17 +304,25 @@ class Grader:
         )
 
     def signin_button(self) -> Any:
-        """A "Sign in with Dartmouth" button (device handshake; token stays in the browser)."""
-        return self._widget("signin", payload={"client": client_info(__version__)})
+        """A "Sign in with Dartmouth" button (device handshake; token stays in the browser).
+
+        Signing in also starts autosave (see :mod:`marimo_grader_client.autosave`):
+        the notebook and its outputs are backed up to the student's storage.
+        """
+        return self._widget(
+            "signin", payload={"client": client_info(__version__)}, on_token=self._start_autosave
+        )
 
     def submit_button(self, question_id: str, outputs: dict[str, Any] | None = None) -> Any:
-        """A "Submit <question_id>" button. The payload is rebuilt when clicked."""
+        """A "Submit <question_id>" button. When clicked, the notebook is re-read
+        and marimo's session snapshot (the student's own outputs) goes with it."""
         outputs = dict(outputs or {})
         return self._widget(
             "submit",
             question_id=question_id,
             payload=self.build_payload(outputs),
             payload_factory=lambda: self.build_payload(outputs),
+            extra_factory=self.snapshot_extra,
         )
 
     def feedback(self, question_id: str) -> Any:

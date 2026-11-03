@@ -297,6 +297,19 @@ class CloudflareR2:
             {"key": r["path"], "size": int(r["size"]), "modified": r["last_modified"]} for r in rows
         ]
 
+    def get(self, key: str) -> tuple[bytes, datetime] | None:
+        """An object's bytes and last-modified time; ``None`` when it does not exist.
+        For the worker (a submission's autosaved snapshot). Never handed to a notebook."""
+        import obstore
+
+        try:
+            res = obstore.get(self._parent_store(), key)
+            return bytes(res.bytes()), res.meta["last_modified"]
+        except FileNotFoundError:
+            return None
+        except Exception as e:  # noqa: BLE001 -- obstore raises its own hierarchy
+            raise StorageError("r2_get", f"reading {key} failed: {e}", 502) from e
+
 
 # --------------------------------------------------------------------------
 # Sessions

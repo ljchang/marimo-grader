@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     artifact_dir: str = "./data/artifacts"
     max_notebook_bytes: int = 2 * 1024 * 1024
     max_outputs_bytes: int = 8 * 1024 * 1024
+    # marimo's session snapshot sent with an attempt (the student's own outputs,
+    # images inlined). Kept under Caddy's 16 MB body limit with the notebook; a
+    # bigger one is dropped, not refused, and the render falls back to autosave.
+    max_snapshot_bytes: int = 10 * 1024 * 1024
 
     # Storage broker (docs/storage-architecture.md). Off until every value is
     # set. Two Cloudflare credentials: the R2 API token's S3 key pair is the

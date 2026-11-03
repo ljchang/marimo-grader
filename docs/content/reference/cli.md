@@ -57,6 +57,21 @@ docker compose -f docker-compose.prod.yml run --rm worker grader rerender --chec
 docker compose -f docker-compose.prod.yml run -d --rm worker grader rerender        # in the background
 ```
 
+## `grader attach-outputs`
+
+Attaches outputs to an attempt that arrived without them — for example an exam submitted before the client sent its session snapshot, or one you re-ran yourself. Run the student's notebook locally, then attach marimo's session (the worker renders it, nothing executes on the grader) or a finished HTML render. Instructors only; each attach is recorded in the course [change log](../instructors/change-log.md), and the grading view labels the result as attached, never as the student's own outputs.
+
+```bash
+marimo export session student.py        # runs it; writes __marimo__/session/student.py.json
+grader attach-outputs --server https://grader.dartbrains.org \
+    --offering neuroimaging/2026-fall --assignment final-exam --netid f00abc1 \
+    --snapshot __marimo__/session/student.py.json --note "re-run locally"
+
+grader attach-outputs --server https://grader.dartbrains.org --submission <id> --html student.html
+```
+
+`--netid` with `--offering` and `--assignment` picks that student's newest attempt (narrow it with `--qid`); `--submission` names one directly. Sign-in is the same device handshake as `grader publish`, or pass `--token`.
+
 ## `grader seed`
 
 Create a course, an offering, an instructor — also made a platform admin — and optional students. Idempotent.

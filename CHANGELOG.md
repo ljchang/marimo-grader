@@ -13,6 +13,51 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+### Added
+
+- **Every submission is graded from the student's own outputs.** Submit now
+  sends marimo's session snapshot (`__marimo__/session/<notebook>.py.json`,
+  every cell's last outputs) with the notebook, waiting a couple of seconds so
+  the newest outputs are in it. A new worker step renders it to HTML without
+  executing anything, in about a second, by matching outputs to the submitted
+  cells by code hash; a cell edited after it last ran shows its code without
+  its stale output. It is the render for assignments with re-run off (the
+  grading view used to show only code and saved files there) and the first
+  render otherwise, until the re-run replaces it. The grading view says which
+  it is ("The student's own outputs, saved with this attempt · 4 of 5 cells")
+  and the queue repeats it next to the score. Nothing changes in assignment
+  notebooks and students do nothing. The worker pins `marimo==0.25.2`: the
+  step uses marimo internals.
+- **Client 0.3.0: autosave.** From the first sign-in (`Grader().signin_button()`,
+  `storage.signin_button()` or `storage.connect()`), one background thread per
+  kernel backs the notebook and its snapshot up to
+  `private/<assignment>/.autosave/` when they change (every 45 s), plus a
+  history copy at most every 10 minutes (the last 20). The sign-in box shows
+  *Autosave on · last saved 14:32*. It never blocks or breaks the notebook and
+  is off in the grader's render, in the browser, against a local storage root,
+  for notebooks without `grader-assignment`, and with `GRADER_AUTOSAVE=0`.
+  When an attempt arrives without a snapshot, the grader renders the autosave
+  closest to the submission time instead, and says so. Staff no longer see
+  `.autosave/` among a student's Saved files.
+- **`grader attach-outputs`** attaches a session snapshot or an HTML render to
+  an existing attempt (instructors only, recorded in the change log, labelled
+  as attached). For attempts made before this release, such as the Fall 2026
+  exam: re-run the notebook locally with `marimo export session`, then attach
+  the session. API: `POST /api/v1/submissions/{id}/outputs`.
+
+### Fixed
+
+- **Saved files thumbnails load.** The web app's Content-Security-Policy
+  allowed images only from its own origin, so every thumbnail (a presigned
+  link to `<account>.r2.cloudflarestorage.com`) was blocked; the links worked
+  because opening one is a navigation. `img-src` now allows
+  `https://*.r2.cloudflarestorage.com`; the web container needs redeploying.
+
+### Upgrade notes
+
+- One migration (`submissions.snapshot_artifact_id`), applied by the deploy's `migrate` step.
+- New settings: `GRADER_MAX_SNAPSHOT_BYTES` (10 MiB), `GRADER_SNAPSHOT_TIMEOUT` (120 s).
+
 ## [0.1.11] — 2026-10-21
 
 ### Added

@@ -252,6 +252,10 @@
             <span class="sub muted small" title={fmtDateTime(current.submitted_at)}>
               attempt {current.attempt_no}, {fmtRelative(current.submitted_at)}{#if current.client?.env}, from {current.client.env}{/if}
             </span>
+            {#if current.render_info?.source === 'snapshot' && current.render_info.snapshot !== 'attached'}
+              <!-- Next to the score: this is what the student saw, not a re-run. -->
+              <span class="sub small">Graded from the student's own outputs{#if current.render_info.matched != null && current.render_info.total != null}{` (${current.render_info.matched}/${current.render_info.total} cells)`}{/if}</span>
+            {/if}
           </div>
           <div class="nav">
             <button onclick={prev} disabled={index === 0} title="Previous (k)">Prev</button>
