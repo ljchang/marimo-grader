@@ -8,12 +8,20 @@
   import { api, errorMessage, type RenderInfo, type Submission, type SubmissionFiles } from '$lib/api';
   import { fmtDateTime } from '$lib/format';
   import RenderFrame from './RenderFrame.svelte';
+  import Splitter from './Splitter.svelte';
 
   let {
     submission,
     height = '100%',
     own = false,
-  }: { submission: Submission; height?: string; own?: boolean } = $props();
+    resizable = false,
+  }: { submission: Submission; height?: string; own?: boolean; resizable?: boolean } = $props();
+
+  // With `resizable`, a handle under the saved files trades their height against the
+  // notebook's. null: the files take their natural height, capped (see .files.capped).
+  let filesH = $state<number | null>(null);
+  let filesEl = $state<HTMLElement | null>(null);
+  let viewEl = $state<HTMLElement | null>(null);
 
   let code = $state<string | null>(null);
   let files = $state<SubmissionFiles | null>(null);
@@ -83,9 +91,14 @@
   }
 </script>
 
-<div class="view" style:height>
+<div class="view" class:resizable style:height bind:this={viewEl}>
   {#if files && files.files.length > 0}
-    <section class="files">
+    <section
+      class="files"
+      class:capped={resizable && filesH === null}
+      bind:this={filesEl}
+      style:height={resizable && filesH !== null ? `${filesH}px` : undefined}
+    >
       <h3>Saved files <span class="muted mono small">{files.prefix}</span></h3>
       <ul>
         {#each files.files as f (f.path)}
@@ -101,6 +114,18 @@
         {/each}
       </ul>
     </section>
+    {#if resizable}
+      <Splitter
+        bind:value={filesH}
+        initial={null}
+        min={60}
+        max={() => (viewEl?.clientHeight ?? 800) - 180}
+        orientation="horizontal"
+        storageKey="grader.filesHeight"
+        measure={() => filesEl?.offsetHeight ?? 200}
+        label="Resize the saved files"
+      />
+    {/if}
   {/if}
 
   {#if error}<p class="muted small">{error}</p>{/if}
@@ -139,6 +164,31 @@
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+  }
+  /* Resizable: the files scroll in their own box, the handle replaces the gap. */
+  .view.resizable {
+    gap: 0;
+  }
+  .view.resizable .files {
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding-bottom: 6px;
+  }
+  .view.resizable .render {
+    min-height: 140px;
+  }
+  .view.resizable .files.capped {
+    max-height: 40%;
+  }
+  .view.resizable .files + :global(.splitter) {
+    margin-bottom: 8px;
+  }
+  .view.resizable .files h3 {
+    position: sticky;
+    top: 0;
+    background: var(--paper);
+    z-index: 1;
+    padding-bottom: 4px;
   }
   .tabs {
     display: flex;

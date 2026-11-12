@@ -20,15 +20,28 @@ from grader.models import (
 POLICIES = ("latest", "highest", "first", "selected")
 
 
-def final_score(db: Session, submission: Submission) -> Score | None:
-    """Latest final score for a submission, else latest score of any kind."""
-    rows = db.scalars(
-        select(Score).where(Score.submission_id == submission.id).order_by(Score.graded_at.desc())
-    ).all()
-    for r in rows:
-        if r.is_final:
-            return r
-    return rows[0] if rows else None
+def published_score(db: Session, submission: Submission) -> Score | None:
+    """The newest published (``is_final``) score: what the student and the gradebook see.
+
+    A draft never stands in for it. Drafts are the grader's work in progress,
+    autosaved as they type, and reach the student only when published.
+    """
+    return db.scalar(
+        select(Score)
+        .where(Score.submission_id == submission.id, Score.is_final)
+        .order_by(Score.graded_at.desc())
+        .limit(1)
+    )
+
+
+def latest_score(db: Session, submission: Submission) -> Score | None:
+    """The newest score of any kind, draft or published: what staff grade from."""
+    return db.scalar(
+        select(Score)
+        .where(Score.submission_id == submission.id)
+        .order_by(Score.graded_at.desc())
+        .limit(1)
+    )
 
 
 def submissions_for(
@@ -47,22 +60,22 @@ def pick_attempt(
     db: Session, subs: list[Submission], policy: str, pinned: Submission | None = None
 ) -> tuple[Submission | None, Score | None]:
     if pinned is not None:
-        return pinned, final_score(db, pinned)
+        return pinned, published_score(db, pinned)
     if not subs:
         return None, None
     if policy == "first":
         s = subs[0]
-        return s, final_score(db, s)
+        return s, published_score(db, s)
     if policy == "highest":
         best: tuple[Submission | None, Score | None] = (None, None)
         for s in subs:
-            sc = final_score(db, s)
+            sc = published_score(db, s)
             if sc is not None and (best[1] is None or sc.total > best[1].total):
                 best = (s, sc)
         return best if best[0] is not None else (subs[-1], None)
     # latest (default) and "selected" without a pin
     s = subs[-1]
-    return s, final_score(db, s)
+    return s, published_score(db, s)
 
 
 def recompute_question_grade(
@@ -94,7 +107,7 @@ def cell_state(db: Session, subs: list[Submission]) -> dict:
     if not subs:
         return {"state": "none"}
     latest = subs[-1]
-    sc = final_score(db, latest)
+    sc = published_score(db, latest)
     if latest.status == SubmissionStatus.failed:
         return {"state": "failed", "attempts": len(subs)}
     if sc is None or latest.status in (SubmissionStatus.received, SubmissionStatus.grading):

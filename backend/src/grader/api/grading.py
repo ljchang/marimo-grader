@@ -43,6 +43,7 @@ from grader.models import (
     Submission,
     SubmissionStatus,
     User,
+    utcnow,
 )
 from grader.services import audit, failures, progress
 from grader.services.artifacts import store
@@ -50,7 +51,8 @@ from grader.services.canvas_export import build_canvas_csv, header_for
 from grader.services.events import Event, bus
 from grader.services.grades import (
     cell_state,
-    final_score,
+    latest_score,
+    published_score,
     recompute_question_grade,
     submissions_for,
 )
@@ -76,8 +78,7 @@ def _students(db: Session, m: Membership) -> list[Enrollment]:
 def _needs_manual(db: Session, sub: Submission) -> bool:
     if sub.question.grading_mode == GradingMode.auto:
         return False
-    sc = final_score(db, sub)
-    return sc is None or not sc.is_final
+    return published_score(db, sub) is None
 
 
 @router.get("/offerings/{offering_id}/triage")
@@ -326,12 +327,14 @@ def queue(
         if not subs:
             continue
         s = subs[-1]
-        j = submission_json(db, s)
+        j = submission_json(db, s, staff=True)
         j["display_name"] = e.user.name
         j["needs_grading"] = _needs_manual(db, s)
         items.append(j)
     items.sort(key=lambda j: (not j["needs_grading"], j["submitted_at"]))
     return {
+        # False for a TA in a course that reserves publishing for instructors.
+        "can_publish": can_publish(m),
         "question": {
             "id": str(q.id),
             "qid": q.qid,
@@ -351,8 +354,68 @@ class ScoreIn(BaseModel):
     manual_points: float | None = None
     rubric_scores: dict[str, float] = Field(default_factory=dict)
     feedback: str | None = None
+    # True publishes: the student sees it. False saves a draft only staff see.
     final: bool = True
     reason: str | None = None
+
+
+def can_publish(m: Membership) -> bool:
+    """Instructors publish; TAs too unless the course reserves it (``ta_can_finalize``)."""
+    return m.role != Role.ta or bool((m.offering.settings or {}).get("ta_can_finalize", True))
+
+
+def _publish(
+    db: Session,
+    m: Membership,
+    sub: Submission,
+    *,
+    manual: float | None,
+    rubric_scores: dict,
+    feedback: str | None,
+    auto_points,
+    grader_id: uuid.UUID | None,
+    reason: str | None,
+) -> QuestionGrade:
+    """Write a published score: the student sees it and it counts. Audited and announced."""
+    prev = published_score(db, sub)
+    sc = Score(
+        submission_id=sub.id,
+        auto_points=auto_points,
+        manual_points=manual,
+        rubric_scores=rubric_scores,
+        feedback=feedback,
+        grader_user_id=grader_id,
+        is_final=True,
+    )
+    db.add(sc)
+    db.flush()
+    if sub.status != SubmissionStatus.failed:
+        sub.status = SubmissionStatus.graded
+    q = sub.question
+    qg = recompute_question_grade(db, sub.enrollment_id, q, q.assignment)
+    audit.record(
+        db,
+        actor_id=m.user.id,
+        offering_id=m.offering.id,
+        entity="score",
+        entity_id=sub.id,
+        action="score",
+        before={"total": prev.total if prev else None},
+        after={"total": sc.total, "final": True},
+        reason=reason,
+    )
+    bus.publish(
+        Event(
+            m.offering.id,
+            "score.updated",
+            {
+                "submission_id": str(sub.id),
+                "question_id": str(q.id),
+                "netid": sub.enrollment.user.netid,
+            },
+        )
+    )
+    return qg
 
 
 @router.post("/submissions/{submission_id}/score")
@@ -368,12 +431,8 @@ def score_submission(
     m = membership_for(db, user, sub.enrollment.offering_id)
     if m is None or not m.is_staff() or not m.can_see_section(sub.enrollment.section_id):
         raise api_error(404, "not_found", "submission not found")
-    if (
-        m.role == Role.ta
-        and body.final
-        and not (m.offering.settings or {}).get("ta_can_finalize", True)
-    ):
-        raise api_error(403, "forbidden", "TAs may not finalize grades in this offering")
+    if body.final and not can_publish(m):
+        raise api_error(403, "forbidden", "TAs may not publish grades in this course")
 
     q = sub.question
     if q.rubric is not None:
@@ -391,49 +450,119 @@ def score_submission(
     manual_max = float(q.max_points) - float(q.auto_points_max)
     if manual is not None and not (0 <= manual <= manual_max + 1e-9):
         raise api_error(422, "out_of_range", f"manual_points must be between 0 and {manual_max:g}")
-    prev = final_score(db, sub)
-    sc = Score(
-        submission_id=sub.id,
-        auto_points=prev.auto_points if prev else None,
-        manual_points=manual,
-        rubric_scores=body.rubric_scores,
-        feedback=body.feedback,
-        grader_user_id=user.id,
-        is_final=body.final,
-    )
-    db.add(sc)
+    newest = latest_score(db, sub)
+    # Autograder points live on the newest row, published or not.
+    auto_points = newest.auto_points if newest else None
+
+    if body.final:
+        qg = _publish(
+            db,
+            m,
+            sub,
+            manual=manual,
+            rubric_scores=body.rubric_scores,
+            feedback=body.feedback,
+            auto_points=auto_points,
+            grader_id=user.id,
+            reason=body.reason,
+        )
+        j = submission_json(db, sub, staff=True)
+        j["question_grade"] = _qg_json(qg)
+        return j
+
+    # A draft: staff only, nothing to recompute, audit or announce. The grader's own
+    # draft, autosaved as they type, is updated in place rather than adding a row
+    # every second; anything else (no score yet, a published one, someone else's
+    # draft) starts a new one.
+    if newest is not None and not newest.is_final and newest.grader_user_id == user.id:
+        newest.manual_points = manual
+        newest.rubric_scores = body.rubric_scores
+        newest.feedback = body.feedback
+        newest.graded_at = utcnow()
+    else:
+        db.add(
+            Score(
+                submission_id=sub.id,
+                auto_points=auto_points,
+                manual_points=manual,
+                rubric_scores=body.rubric_scores,
+                feedback=body.feedback,
+                grader_user_id=user.id,
+                is_final=False,
+            )
+        )
     db.flush()
-    if sub.status != SubmissionStatus.failed and body.final:
-        sub.status = SubmissionStatus.graded
-    qg = recompute_question_grade(db, sub.enrollment_id, q, q.assignment)
-    audit.record(
-        db,
-        actor_id=user.id,
-        offering_id=m.offering.id,
-        entity="score",
-        entity_id=sub.id,
-        action="score",
-        before={"total": prev.total if prev else None},
-        after={"total": sc.total, "final": sc.is_final},
-        reason=body.reason,
-    )
-    bus.publish(
-        Event(
-            m.offering.id,
-            "score.updated",
-            {
-                "submission_id": str(sub.id),
-                "question_id": str(q.id),
-                "netid": sub.enrollment.user.netid,
-            },
+    return _draft_json(db, sub)
+
+
+class PublishDraftsIn(BaseModel):
+    reason: str | None = None
+
+
+@router.post("/offerings/{offering_id}/questions/{question_id}/publish-drafts")
+def publish_drafts(
+    question_id: uuid.UUID,
+    body: PublishDraftsIn | None = None,
+    m: Membership = Depends(require_staff),
+    db: Session = Depends(get_db),
+):
+    """Publish every draft on this question at once, as each grader left it.
+
+    Covers the students this staff member can see, on their latest attempt (what the
+    queue shows). An attempt the autograder scored but no person has touched is not
+    a draft and stays unpublished.
+    """
+    q = db.get(Question, question_id)
+    if q is None or q.assignment.offering_id != m.offering.id:
+        raise api_error(404, "not_found", "question not found")
+    if not can_publish(m):
+        raise api_error(403, "forbidden", "TAs may not publish grades in this course")
+    reason = (body.reason if body else None) or "published with the other drafts"
+    published = []
+    for e in _students(db, m):
+        subs = submissions_for(db, e.id, q.id)
+        if not subs:
+            continue
+        sub = subs[-1]
+        d = latest_score(db, sub)
+        if d is None or d.is_final or d.grader_user_id is None:
+            continue
+        _publish(
+            db,
+            m,
+            sub,
+            manual=float(d.manual_points) if d.manual_points is not None else None,
+            rubric_scores=dict(d.rubric_scores or {}),
+            feedback=d.feedback,
+            auto_points=d.auto_points,
+            grader_id=d.grader_user_id,
+            reason=reason,
+        )
+        published.append(e.user.netid)
+    return {"published": len(published), "netids": published}
+
+
+def _draft_json(db: Session, sub: Submission) -> dict:
+    """The answer to a draft save. The official grade is untouched, so just read it."""
+    j = submission_json(db, sub, staff=True)
+    j["question_grade"] = _qg_json(
+        db.scalar(
+            select(QuestionGrade).where(
+                QuestionGrade.enrollment_id == sub.enrollment_id,
+                QuestionGrade.question_id == sub.question_id,
+            )
         )
     )
-    j = submission_json(db, sub)
-    j["question_grade"] = {
+    return j
+
+
+def _qg_json(qg: QuestionGrade | None) -> dict | None:
+    if qg is None:
+        return None
+    return {
         "points": float(qg.points) if qg.points is not None else None,
         "submission_id": str(qg.submission_id) if qg.submission_id else None,
     }
-    return j
 
 
 @router.get("/offerings/{offering_id}/students/{netid}")
@@ -456,7 +585,7 @@ def student_history(
         "display_name": e.user.name,
         "section": e.section.name if e.section else None,
         "status": e.status.value,
-        "submissions": [submission_json(db, s) for s in subs],
+        "submissions": [submission_json(db, s, staff=True) for s in subs],
         "question_grades": {
             str(g.question_id): float(g.points) if g.points is not None else None for g in grades
         },
