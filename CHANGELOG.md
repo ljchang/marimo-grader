@@ -13,6 +13,8 @@ submits to upgrade at different times by design. Entries below say which.
 
 ## [Unreleased]
 
+## [0.1.12] — 2026-11-12
+
 ### Added
 
 - **Every submission is graded from the student's own outputs.** Client 0.3.0's
