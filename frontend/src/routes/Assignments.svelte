@@ -270,9 +270,10 @@
     }
   }
 
-  const SEGMENTS: ProgressState[] = ['graded', 'waiting', 'failed', 'running', 'none'];
+  const SEGMENTS: ProgressState[] = ['graded', 'draft', 'waiting', 'failed', 'running', 'none'];
   const SEGMENT_WORDS: Record<ProgressState, string> = {
     graded: 'graded',
+    draft: 'drafted, not published',
     waiting: 'waiting for you',
     failed: 'failed to run',
     running: 'being graded',
@@ -674,6 +675,9 @@
   }
   .bar i.graded {
     background: var(--accent);
+  }
+  .bar i.draft {
+    background: repeating-linear-gradient(135deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px);
   }
   .bar i.waiting {
     background: var(--warn);

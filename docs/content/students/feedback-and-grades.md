@@ -22,7 +22,7 @@ This is the one that matters at the end of term. A MoLab session can be deleted,
 | *failed* | the grader could **not run** your notebook. Not a zero — a problem for your instructor, who has a Retry button |
 | A dash | nothing submitted for that question |
 
-A score your instructor saved without releasing still reaches you: the portal shows it like any other, and the notebook labels it *Provisional score; a final grade may follow.* Treat a provisional mark as exactly that — it can change before it is finalised.
+Your instructor grades in drafts that you cannot see; a score appears here when they publish it. If they change a grade later, you keep seeing the published one until they publish the new one.
 
 ## Reading autograded feedback
 

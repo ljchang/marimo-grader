@@ -141,6 +141,29 @@
   }
   onMount(loadRoster);
 
+  // Whether TAs publish grades or leave them as drafts for an instructor.
+  let taCanPublish = $state<boolean | null>(null);
+  let taSaving = $state(false);
+  onMount(async () => {
+    try {
+      taCanPublish = (await api.offerings.get(offeringId)).settings?.ta_can_finalize ?? true;
+    } catch (err) {
+      error = errorMessage(err);
+    }
+  });
+
+  async function setTaCanPublish(on: boolean) {
+    taSaving = true;
+    error = null;
+    try {
+      taCanPublish = (await api.offerings.patchSettings(offeringId, { ta_can_finalize: on })).settings?.ta_can_finalize ?? true;
+    } catch (err) {
+      error = errorMessage(err);
+    } finally {
+      taSaving = false;
+    }
+  }
+
   async function runPreview(e: SubmitEvent) {
     e.preventDefault();
     const file = files?.[0];
@@ -280,6 +303,15 @@
     </div>
     {#if staffMessage}<p class="small muted" style="margin:0.5rem 0 0">{staffMessage}</p>{/if}
   </form>
+  {#if taCanPublish !== null}
+    <label class="field inline ta-publish">
+      <input type="checkbox" checked={taCanPublish} disabled={taSaving} onchange={(e) => setTaCanPublish((e.currentTarget as HTMLInputElement).checked)} />
+      <span>
+        TAs can publish grades
+        <span class="muted small">{taCanPublish ? 'TAs publish what they grade, as instructors do.' : 'TAs grade as drafts; an instructor publishes them (Publish all drafts in the grading queue).'}</span>
+      </span>
+    </label>
+  {/if}
 </section>
 
 <section class="block">
@@ -377,5 +409,12 @@
   tr.excluded td {
     color: var(--muted);
     text-decoration: line-through;
+  }
+  .ta-publish {
+    margin-top: 12px;
+    align-items: flex-start;
+  }
+  .ta-publish .small {
+    display: block;
   }
 </style>

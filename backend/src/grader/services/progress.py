@@ -1,13 +1,14 @@
 """Class progress: where every student stands on every question, in a few queries.
 
 The assignments table and the assignment page both read this. Each (student,
-question) is one of five states, decided from the latest attempt:
+question) is one of six states, decided from the latest attempt:
 
 ``none``     no attempt yet
 ``failed``   the grader could not run it (the Needs attention page has the cause)
-``waiting``  read by a person and not yet given a final grade
+``waiting``  to be graded by a person, who has not started
+``draft``    a person has started grading it; nothing is published yet
 ``running``  queued or being graded automatically
-``graded``   has a score
+``graded``   has a published score
 """
 
 from __future__ import annotations
@@ -28,18 +29,18 @@ from grader.models import (
     SubmissionStatus,
 )
 
-STATES = ("graded", "waiting", "failed", "running", "none")
+STATES = ("graded", "draft", "waiting", "failed", "running", "none")
 # A student's state on a whole assignment is the most pressing of their questions.
-_URGENCY = {"waiting": 0, "failed": 1, "running": 2, "graded": 3, "none": 4}
+_URGENCY = {"waiting": 0, "failed": 1, "draft": 2, "running": 3, "graded": 4, "none": 5}
 
 
-def _state(sub: Submission | None, score: Score | None, by_hand: bool) -> str:
+def _state(sub: Submission | None, score: Score | None, by_hand: bool, drafted: bool) -> str:
     if sub is None:
         return "none"
     if sub.status == SubmissionStatus.failed:
         return "failed"
     if by_hand and (score is None or not score.is_final):
-        return "waiting"
+        return "draft" if drafted else "waiting"
     if score is None or sub.status in (SubmissionStatus.received, SubmissionStatus.grading):
         return "running"
     return "graded"
@@ -63,17 +64,21 @@ def compute(
         ):
             latest[(s.enrollment_id, s.question_id)] = s
 
-    # final_score() for every latest attempt at once: the newest final score, else the newest.
-    newest: dict[uuid.UUID, Score] = {}
+    # published_score() for every latest attempt at once; drafts do not count as
+    # grades, but an attempt whose newest row is a person's draft is under way.
     newest_final: dict[uuid.UUID, Score] = {}
+    newest_any: dict[uuid.UUID, Score] = {}
     sub_ids = [s.id for s in latest.values()]
     if sub_ids:
         for sc in db.scalars(
             select(Score).where(Score.submission_id.in_(sub_ids)).order_by(Score.graded_at)
         ):
-            newest[sc.submission_id] = sc
+            newest_any[sc.submission_id] = sc
             if sc.is_final:
                 newest_final[sc.submission_id] = sc
+    drafted = {
+        sid for sid, sc in newest_any.items() if not sc.is_final and sc.grader_user_id is not None
+    }
 
     points: dict[tuple[uuid.UUID, uuid.UUID], float | None] = {}
     if enr_ids and q_ids:
@@ -103,12 +108,12 @@ def compute(
             row: list[str] = []
             for e in students:
                 sub = latest.get((e.id, q.id))
-                sc = (newest_final.get(sub.id) or newest.get(sub.id)) if sub else None
-                st = _state(sub, sc, by_hand)
+                sc = newest_final.get(sub.id) if sub else None
+                st = _state(sub, sc, by_hand, sub is not None and sub.id in drafted)
                 counts[st] += 1
                 per_student[e.id].append(st)
                 row.append(st)
-            to_grade += counts["waiting"]
+            to_grade += counts["waiting"] + counts["draft"]
             q_out[str(q.id)] = {"counts": counts, **({"marks": row} if marks else {})}
 
         students_counts = dict.fromkeys(STATES, 0)

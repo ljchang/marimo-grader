@@ -35,8 +35,51 @@ submits to upgrade at different times by design. Entries below say which.
   exam: re-run the notebook locally with `marimo export session`, then attach
   the session. API: `POST /api/v1/submissions/{id}/outputs`.
 
+- **Grades autosave as drafts; Publish is what the student sees.** In the
+  grading queue every edit to a score, rubric item or comment saves itself as a
+  draft a moment after you stop typing, and at once when you move to another
+  student (`j`/`k`, Prev/Next) or leave the page. A copy waits in the browser
+  until the server has it, so a dropped connection, a closed tab or a crash
+  loses nothing: the edits come back the next time the queue opens. The Save
+  button is now **Publish** (still ⌘Enter, still moving on to the next
+  student), and the "Release this grade to the student" checkbox is gone. A
+  line under the form says where things stand: draft saved, published, or
+  edited since publishing (the student keeps seeing the published grade until
+  you publish the changes). Drafts update one row in place, with no audit entry
+  or event; publishing writes both, as saving did.
+- **Publish all drafts.** Grade a whole question quietly, then publish every
+  draft on it at once from the queue's header, each as its grader left it, so
+  the class gets its grades together. Answers nobody has started stay
+  unpublished. API: `POST /api/v1/offerings/{id}/questions/{qid}/publish-drafts`.
+- **Drafts show in class progress.** A new state, *drafted, not published*,
+  hatched green on the assignments table and the assignment page's student
+  strips. Drafts count toward "to grade" and the Grade button.
+- **TAs can publish grades: a course setting you can change.** A toggle under
+  Teaching staff on the roster page (`ta_can_finalize`, on by default, which
+  until now could only be set when the course was created). Off, a TA's queue
+  has no Publish button and their grades wait as drafts for an instructor. API:
+  `PATCH /api/v1/offerings/{id}/settings`.
+- **Resizable grading panes.** Drag the bar between the notebook and the
+  grading panel, or under the saved files, to give either more room; arrow keys
+  nudge a focused bar, a double-click resets it, and the sizes are kept per
+  browser.
+
+### Changed
+
+- **Drafts replace provisional scores.** A score saved with "Release this grade"
+  unticked was *provisional*: still shown to the student, feedback and all
+  (the notebook added "Provisional score; a final grade may follow"), and
+  counted in their overview and the Canvas export. Students and the gradebook
+  now see published scores only; staff views show the newest, draft or not.
+  When this deploys, any score that was saved provisional and never released
+  becomes a draft: it leaves the student's view and is back in your queue,
+  ready to publish. On hand-graded questions the autograder's partial points
+  also wait for publishing.
+
 ### Fixed
 
+- **Moving to the next student no longer discards what you typed.** `j`/`k` and
+  Prev/Next reset the form without saving it.
 - **Saved files thumbnails load.** The web app's Content-Security-Policy
   allowed images only from its own origin, so every thumbnail (a presigned
   link to `<account>.r2.cloudflarestorage.com`) was blocked; the links worked

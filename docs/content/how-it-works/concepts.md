@@ -77,7 +77,7 @@ Runs can fail independently and be retried, which is why "the autograder could n
 
 ## Score, release, audit
 
-A **score** is a record, not a field — every save writes a new one, so a grade has a history. A score is either **final** or **provisional**; both are visible to the student, and provisional means the grader has said it may still change.
+A **score** is a record, not a field, so a grade has a history. A score is either a **draft** or **published**. Drafts are the grader's work in progress, saved automatically as they type and visible only to staff; the student, their overview and the Canvas export see published scores only. Editing a published grade starts a new draft, and the student keeps seeing the published one until it is published again.
 
 Every action that could change a grade or who is in the course appends to the **audit trail**: who, when, before, after, and a reason if one was given. It is append-only and visible to instructors as the [change log](../instructors/change-log.md).
 

@@ -44,7 +44,7 @@ from grader.models import (
 from grader.services import audit, availability, notebook_submission, storage
 from grader.services.artifacts import store
 from grader.services.events import Event, bus
-from grader.services.grades import final_score
+from grader.services.grades import latest_score, published_score
 from grader.util import iso
 
 router = APIRouter(tags=["submissions"])
@@ -158,8 +158,17 @@ def render_info(db: Session, s: Submission) -> dict | None:
     return info
 
 
-def submission_json(db: Session, s: Submission, *, include_feedback: bool = True) -> dict:
-    sc = final_score(db, s)
+def submission_json(
+    db: Session, s: Submission, *, staff: bool = False, include_feedback: bool = True
+) -> dict:
+    """One attempt as the viewer may see it.
+
+    Students get the published score only, never a draft. Staff get the newest score,
+    draft or not, so the queue picks up where the grader left off, plus when it was
+    last published (``published_at``, None if never).
+    """
+    published = published_score(db, s)
+    sc = latest_score(db, s) if staff else published
     out = {
         "id": str(s.id),
         "question_id": str(s.question_id),
@@ -191,6 +200,10 @@ def submission_json(db: Session, s: Submission, *, include_feedback: bool = True
             "is_final": sc.is_final,
             "graded_at": iso(sc.graded_at),
         }
+        if staff:
+            out["score"]["published_at"] = iso(published.graded_at) if published else None
+            # A person's unpublished work, as opposed to the autograder's own row.
+            out["score"]["draft"] = not sc.is_final and sc.grader_user_id is not None
     return out
 
 
@@ -330,7 +343,7 @@ def get_submission(
     submission_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)
 ):
     sub = _load_visible(db, user, submission_id)
-    out = submission_json(db, sub)
+    out = submission_json(db, sub, staff=sub.enrollment.user_id != user.id)
     out["client_check_results"] = sub.client_check_results
     out["runs"] = [
         {

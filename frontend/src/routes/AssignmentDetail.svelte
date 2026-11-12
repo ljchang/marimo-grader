@@ -82,12 +82,15 @@
 
   const MARK_WORDS: Record<ProgressState, string> = {
     graded: 'graded',
+    draft: 'drafted, not published',
     waiting: 'waiting for you',
     failed: 'failed to run',
     running: 'being graded',
     none: 'not submitted',
   };
-  const TALLY: ProgressState[] = ['graded', 'waiting', 'failed', 'running', 'none'];
+  const TALLY: ProgressState[] = ['graded', 'draft', 'waiting', 'failed', 'running', 'none'];
+  /** Answers that still need a person: not started, or drafted and unpublished. */
+  const toGrade = (c: { waiting: number; draft: number }) => c.waiting + c.draft;
 
   const graded = (mode: string) =>
     a?.settings.autograde === false || mode === 'manual'
@@ -175,8 +178,8 @@
               {#if takesRubric(q)}
                 <button class="quiet" onclick={() => (rubricFor = q)}>{q.rubric_id ? 'Edit rubric' : 'Add a rubric'}</button>
               {/if}
-              {#if qp && qp.counts.waiting > 0}
-                <a class="btn primary" href="/o/{offeringId}/grade/{q.id}">Grade {qp.counts.waiting}</a>
+              {#if qp && toGrade(qp.counts) > 0}
+                <a class="btn primary" href="/o/{offeringId}/grade/{q.id}">Grade {toGrade(qp.counts)}</a>
               {:else if qp && qp.counts.none < roster}
                 <a class="btn" href="/o/{offeringId}/grade/{q.id}">Review answers</a>
               {/if}
@@ -341,6 +344,9 @@
   }
   .mark.graded {
     background: var(--accent);
+  }
+  .mark.draft {
+    background: repeating-linear-gradient(135deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px);
   }
   .mark.waiting {
     background: var(--warn);

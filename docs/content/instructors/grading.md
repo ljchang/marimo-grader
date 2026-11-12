@@ -45,7 +45,7 @@ The left pane is the student's notebook rendered with each cell's code above its
 
 The queue's right pane repeats *Graded from the student's own outputs* next to the score whenever that is what you are looking at. **Code** switches to the notebook source exactly as submitted. Written answers submitted through a text box appear in the right pane under **Submitted answers**. Student code never runs in your browser.
 
-The right pane holds the score. If the question has a rubric, each item has its own points, grouped under its part with a subtotal, and the total sums them; you can override the total. **Full marks for the blank items** fills every item you have not scored, so you can start from full marks and take points off. Feedback is a free text box the student sees.
+The right pane holds the score. Everything you enter saves itself as a **draft** a moment after you stop typing, and at once when you move to another student or leave the page; nothing needs saving by hand. A line under the form says where things stand. Students see nothing of a draft: **Publish** (or `Cmd+Enter`) is what makes the score and feedback theirs, and moves you to the next student. If the question has a rubric, each item has its own points, grouped under its part with a subtotal, and the total sums them; you can override the total. **Full marks for the blank items** fills every item you have not scored, so you can start from full marks and take points off. Feedback is a free text box the student sees.
 
 ### Rubrics
 
@@ -63,21 +63,21 @@ A line at the margin starts a part and indented lines under it are its items, wo
 
 Scores are stored by each item's position (`3.4` is the fourth item of the third part), so once grading has started, add items at the end of a part rather than in the middle.
 
-/// admonition | "Release this grade to the student" does not withhold it
-    type: warning
+### Drafts and publishing
 
-The checkbox is on by default. Unticking it marks the score **provisional**, not private: the student portal still shows the points and the feedback, and the notebook adds *Provisional score; a final grade may follow.*
+- **Publish as you go**: `Cmd+Enter` after each student.
+- **Publish together**: grade the whole question as drafts, then **Publish all drafts** in the queue's header publishes each one as its grader left it, so the class gets its grades at the same moment. Answers nobody has started stay unpublished.
+- **Changing a published grade**: edit it as usual. The change is a draft (*the student still sees what was published*) until you click **Publish changes**.
 
-So an unreleased score is a score the student can see and you have said you may change — not a draft they cannot. If you need marks to stay invisible until the whole class is graded, do not save them yet.
-///
+If the connection drops, what you typed is kept in the browser and sent when it comes back; if the tab closes first, it is restored the next time you open the queue. On the assignment page, drafted answers show hatched: graded, not yet published. In a course where TAs cannot publish (see [Roster and staff](roster-and-staff.md)), a TA's queue has no Publish button and their grades wait as drafts for an instructor.
 
-Keyboard: `j` and `k` move between students, `f` jumps to the feedback box, and `Cmd+Enter` (or `Ctrl+Enter`) saves. New submissions that arrive while you grade are added to the end of the queue without moving you.
+Keyboard: `j` and `k` move between students, `f` jumps to the feedback box, and `Cmd+Enter` (or `Ctrl+Enter`) publishes and moves on. New submissions that arrive while you grade are added to the end of the queue without moving you.
 
 Staff can submit to their own offering, so an instructor's test submissions appear here too — that is the intended way to rehearse an assignment before releasing it.
 
 ## How a score becomes a grade
 
-Every save creates a new score record; nothing is overwritten, and each save is in the change log with who, when, before, after, and an optional reason.
+Every publish creates a new score record; nothing is overwritten, and each publish is in the change log with who, when, before, after, and an optional reason. A draft is one record per grader, updated as they type, and does not appear in the change log until it is published.
 
 The grade for a question is derived from the assignment's grade policy over the student's attempts:
 

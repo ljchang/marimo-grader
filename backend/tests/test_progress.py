@@ -62,7 +62,14 @@ def test_states_counts_and_average(client, seed):
     _grade(b1, 4)
     a = _progress(client, seed)["assignments"][str(seed.assignment_id)]
     # Alice still waits on q05; Bob is fully graded, his skipped q05 counting as zero.
-    assert a["students"] == {"graded": 1, "waiting": 1, "failed": 0, "running": 0, "none": 0}
+    assert a["students"] == {
+        "graded": 1,
+        "draft": 0,
+        "waiting": 1,
+        "failed": 0,
+        "running": 0,
+        "none": 0,
+    }
     assert a["average"] == 40.0 and a["averaged_over"] == 1
 
 

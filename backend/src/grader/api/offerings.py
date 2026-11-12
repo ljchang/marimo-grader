@@ -136,6 +136,38 @@ def get_offering(m: Membership = Depends(require_member)):
     return _offering_json(m.offering, m.enrollment)
 
 
+class OfferingSettingsIn(BaseModel):
+    """The course settings an instructor may change. Leave a field out to keep it."""
+
+    # False: TAs grade as drafts and an instructor publishes them.
+    ta_can_finalize: bool | None = None
+
+
+@router.patch("/offerings/{offering_id}/settings")
+def patch_offering_settings(
+    body: OfferingSettingsIn,
+    m: Membership = Depends(require_instructor),
+    db: Session = Depends(get_db),
+):
+    o = m.offering
+    before = dict(o.settings or {})
+    changes = body.model_dump(exclude_none=True)
+    # A fresh dict, so the JSON column sees the change.
+    o.settings = {**before, **changes}
+    db.flush()
+    audit.record(
+        db,
+        actor_id=m.user.id,
+        offering_id=o.id,
+        entity="offering",
+        entity_id=o.id,
+        action="settings",
+        before={k: before.get(k) for k in changes},
+        after=changes,
+    )
+    return _offering_json(o, m.enrollment)
+
+
 class PreviewIn(BaseModel):
     on: bool
 

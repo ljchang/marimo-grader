@@ -63,6 +63,8 @@ export interface CsrfResponse {
 export interface OfferingSettings {
   public_student_notebooks?: boolean;
   retention_days?: number;
+  /** False: TAs grade as drafts and only instructors publish. On by default. */
+  ta_can_finalize?: boolean;
   [key: string]: unknown;
 }
 
@@ -100,7 +102,7 @@ export interface AssignmentSettings {
 
 /** Server-computed window, so every client agrees on "open" without clock math. */
 /** Where one student stands on one question (services/progress.py). */
-export type ProgressState = 'graded' | 'waiting' | 'failed' | 'running' | 'none';
+export type ProgressState = 'graded' | 'draft' | 'waiting' | 'failed' | 'running' | 'none';
 export type ProgressCounts = Record<ProgressState, number>;
 
 export interface AssignmentProgress {
@@ -142,6 +144,7 @@ interface RawQueue {
     grading_mode: GradingMode;
     rubric: { id: string; name: string; items: RubricSpec[] } | null;
   };
+  can_publish: boolean;
   items: Submission[];
 }
 
@@ -155,6 +158,8 @@ export interface Queue {
     grading_mode: GradingMode;
     rubric?: RubricItem[];
   };
+  /** False for a TA in a course that reserves publishing for instructors. */
+  can_publish: boolean;
   items: Submission[];
 }
 
@@ -253,9 +258,14 @@ export interface Score {
   manual_points?: number | null;
   rubric_scores?: Record<string, number>;
   feedback?: string | null;
-  final?: boolean;
+  /** True once published: what the student sees. False for a draft. */
+  is_final?: boolean;
   graded_at?: string | null;
   graded_by?: string | null;
+  /** Staff only: when this attempt was last published, null if never. */
+  published_at?: string | null;
+  /** Staff only: the newest score is a person's unpublished draft. */
+  draft?: boolean;
 }
 
 export interface SubmissionClient {
@@ -441,6 +451,7 @@ export interface ScoreInput {
   manual_points: number | null;
   rubric_scores: Record<string, number>;
   feedback: string;
+  /** True publishes to the student; false saves a draft only staff see. */
   final: boolean;
 }
 
@@ -669,6 +680,8 @@ interface RequestOptions {
   redirect?: RequestRedirect;
   /** Skip the CSRF header. Only for routes that take no session at all. */
   anonymous?: boolean;
+  /** Let the request outlive the page (a last save as the tab closes). */
+  keepalive?: boolean;
 }
 
 function qs(query?: Query): string {
@@ -703,6 +716,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       body: opts.form ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
       signal: opts.signal,
       redirect: opts.redirect ?? 'follow',
+      keepalive: opts.keepalive,
     });
   };
 
@@ -802,6 +816,10 @@ export const api = {
     },
     get(offeringId: string, signal?: AbortSignal): Promise<Offering> {
       return request<Offering>(`/offerings/${enc(offeringId)}`, { signal });
+    },
+    /** Instructors: change course settings; fields left out are kept. */
+    patchSettings(offeringId: string, body: { ta_can_finalize?: boolean }): Promise<Offering> {
+      return request<Offering>(`/offerings/${enc(offeringId)}/settings`, { method: 'PATCH', body });
     },
     assignments(offeringId: string, signal?: AbortSignal): Promise<Assignment[]> {
       return request<Assignment[]>(`/offerings/${enc(offeringId)}/assignments`, { signal });
@@ -937,12 +955,21 @@ export const api = {
         description: r.description,
         group: r.group,
       }));
-      return { question: { ...raw.question, rubric }, items: raw.items };
+      return { question: { ...raw.question, rubric }, can_publish: raw.can_publish, items: raw.items };
     },
-    score(submissionId: string, body: ScoreInput): Promise<Score> {
-      return request<Score>(`/submissions/${enc(submissionId)}/score`, {
+    /** Save a draft (final: false) or publish. Answers with the whole attempt. */
+    score(submissionId: string, body: ScoreInput, opts: { keepalive?: boolean } = {}): Promise<Submission> {
+      return request<Submission>(`/submissions/${enc(submissionId)}/score`, {
         method: 'POST',
         body,
+        keepalive: opts.keepalive,
+      });
+    },
+    /** Publish every draft on a question, as each grader left it. */
+    publishDrafts(offeringId: string, questionId: string): Promise<{ published: number; netids: string[] }> {
+      return request(`/offerings/${enc(offeringId)}/questions/${enc(questionId)}/publish-drafts`, {
+        method: 'POST',
+        body: {},
       });
     },
     audit(offeringId: string, signal?: AbortSignal): Promise<AuditEntry[]> {

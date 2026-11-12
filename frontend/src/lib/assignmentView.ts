@@ -92,9 +92,10 @@ export function summary(a: Assignment): string {
 export const uploadLabel = (a: Assignment) =>
   a.latest_version === null ? 'Upload instructor notebook…' : 'Upload corrected notebook…';
 
-/** Where Grade goes: straight into the queue when only one question has answers waiting. */
+/** Where Grade goes: straight into the queue when only one question has answers to grade
+ *  (not started, or drafted and not yet published). */
 export function gradeHref(offeringId: string, a: Assignment, p: AssignmentProgress | undefined): string {
-  const waiting = Object.entries(p?.questions ?? {}).filter(([, q]) => q.counts.waiting > 0);
+  const waiting = Object.entries(p?.questions ?? {}).filter(([, q]) => q.counts.waiting + q.counts.draft > 0);
   const [only] = waiting;
   if (waiting.length === 1 && only) return `/o/${offeringId}/grade/${only[0]}`;
   return `/o/${offeringId}/assignments/${a.id}`;
