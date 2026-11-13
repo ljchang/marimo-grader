@@ -50,7 +50,7 @@ Rotating the notebook key is the intended emergency response, and it is cheap: s
 
 A notebook's JavaScript runs on whatever origin the notebook is served from, so the grader has to allow those origins explicitly.
 
-`GRADER_CORS_ORIGINS` is the list — by default localhost for development, `https://molab.marimo.io`, and the course website. There is also a regular expression for MoLab, which serves a running notebook from a per-session subdomain of `molab.run` whose id changes every session, so no fixed list can cover it.
+`GRADER_CORS_ORIGINS` is the list — by default localhost for development, `https://molab.marimo.io`, and the course website. There is also a regular expression for MoLab, which serves a running notebook from a per-session subdomain of `molab.run` whose id changes every session, so no fixed list can cover it. Localhost on any port is always allowed, in production too: students run notebooks on their own computers with `marimo edit`, which moves to the next free port when 2718 is taken.
 
 Allowing an origin broadly is safe here because of one decision: **credentials are never allowed on cross-origin requests.** No cookie crosses an origin, and every route a notebook calls is bearer-authenticated with a token the student had to approve in a first-party tab. An arbitrary page that guessed the endpoints would have nothing to send.
 

@@ -40,14 +40,34 @@ def test_origin_regex(rx, origin, allowed):
     assert bool(re.match(rx, origin)) is allowed
 
 
-def test_localhost_only_outside_prod():
-    assert re.match(Settings(env="test").cors_regex, "http://localhost:2718")
-    # The prod branch drops the localhost alternative; check the property's logic
-    # without instantiating prod settings (which demand every secret).
+@pytest.mark.parametrize("env", ["test", "prod"])
+@pytest.mark.parametrize(
+    "origin,allowed",
+    [
+        ("http://localhost:2718", True),
+        # marimo moves to the next free port when 2718 is taken.
+        ("http://localhost:2720", True),
+        ("http://127.0.0.1:2719", True),
+        ("http://localhost", True),
+        (MOLAB_SANDBOX, True),
+        ("http://localhost.attacker.test", False),
+        ("http://localhost:2718.attacker.test", False),
+        ("https://evil.test", False),
+    ],
+)
+def test_localhost_any_port_in_every_env(env, origin, allowed):
+    """Students run notebooks locally against the production grader."""
+    # Prod settings demand every secret, so switch env on a test instance.
     s = Settings(env="test")
-    object.__setattr__(s, "env", "prod")
-    assert "localhost" not in (s.cors_regex or "")
-    assert re.match(s.cors_regex, MOLAB_SANDBOX)
+    object.__setattr__(s, "env", env)
+    assert bool(re.match(s.cors_regex, origin)) is allowed
+
+
+def test_localhost_survives_custom_regex():
+    """An operator-set GRADER_CORS_ORIGIN_REGEX must not drop localhost."""
+    s = Settings(env="test", cors_origin_regex=r"^https://example\.test$")
+    assert re.match(s.cors_regex, "http://localhost:2720")
+    assert re.match(s.cors_regex, "https://example.test")
 
 
 def test_widget_preflight_is_allowed(client):

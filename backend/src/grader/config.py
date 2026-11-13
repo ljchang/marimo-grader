@@ -96,11 +96,18 @@ class Settings(BaseSettings):
 
     @property
     def cors_regex(self) -> str | None:
-        """Origin regex for CORS: the configured one, plus localhost off-prod."""
+        """Origin regex for CORS: the configured one, plus localhost on any port.
+
+        Localhost is allowed in prod too: students run notebooks on their own
+        machines (``marimo edit``), and marimo takes the next free port when
+        2718 is busy, so no fixed list entry covers it. Only code already
+        running on the student's computer can send a localhost Origin, and the
+        same reasoning as for molab.run applies -- no credentials cross
+        origins, and every widget route needs a student-approved Bearer token.
+        """
         patterns = [self.cors_origin_regex] if self.cors_origin_regex else []
-        if self.env != "prod":
-            patterns.append(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$")
-        return "|".join(f"(?:{p})" for p in patterns) or None
+        patterns.append(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$")
+        return "|".join(f"(?:{p})" for p in patterns)
 
     artifact_dir: str = "./data/artifacts"
     max_notebook_bytes: int = 2 * 1024 * 1024
